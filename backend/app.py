@@ -1,17 +1,28 @@
 import os
-import uvicorn
-from app.main import app
+import gradio as gr
+import spaces
+from app.main import app as fastapi_app
 
-try:
-    import spaces
+@spaces.GPU
+def gpu_ping(msg: str):
+    """Registered @spaces.GPU function for Hugging Face ZeroGPU supervisor."""
+    return f"ZeroGPU Active: {msg}"
 
-    @spaces.GPU
-    def _zero_gpu_init():
-        """Satisfies ZeroGPU startup check for Hugging Face Spaces."""
-        return True
-except ImportError:
-    pass
+with gr.Blocks(title="Multi-Store RAG Backend API") as demo:
+    gr.Markdown("# 🚀 Multi-Store RAG Backend API")
+    gr.Markdown("""
+    The FastAPI backend is operational on Hugging Face ZeroGPU.
+    - **Swagger UI**: [`/api/docs`](./api/docs)
+    - **Health Check**: [`/api/v1/health`](./api/v1/health)
+    - **Query API**: `/api/v1/query`
+    """)
+    inp = gr.Textbox(value="ping", label="Test Connection")
+    out = gr.Textbox(label="Result")
+    btn = gr.Button("Check ZeroGPU Status")
+    btn.click(fn=gpu_ping, inputs=inp, outputs=out)
+
+app = gr.mount_gradio_app(fastapi_app, demo, path="/ui")
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 7860))
-    uvicorn.run("app.main:app", host="0.0.0.0", port=port, log_level="info")
+    demo.launch(server_name="0.0.0.0", server_port=port, app=fastapi_app)
