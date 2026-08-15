@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Store RAG Chatbot — Table Pipeline Architecture (Developer View)</title>
+<style>
+  :root {
+    --bg: #0d1117; --bg-elev: #161b22; --bg-elev2: #1c2333; --border: #2d3748;
+    --text: #e6edf3; --text-dim: #9aa7b4; --text-faint: #6b7684;
+    --accent: #4c9aff; --accent-soft: rgba(76,154,255,0.12);
+    --parsing: #4c9aff; --ocr: #2dd4bf; --vlm: #a78bfa; --storage: #34d399;
+    --lineage: #f59e0b; --retrieval: #818cf8; --validation: #f87171;
+    --code-bg: #0a0e14; --shadow: 0 4px 24px rgba(0,0,0,0.4);
+    --radius: 10px; --sidebar-w: 268px;
+  }
+  html[data-theme="light"] {
+    --bg: #f6f8fa; --bg-elev: #ffffff; --bg-elev2: #eef2f7; --border: #d0d7de;
+    --text: #1f2328; --text-dim: #57606a; --text-faint: #8c959f;
+    --accent: #0969da; --accent-soft: rgba(9,105,218,0.10);
+    --parsing: #0969da; --ocr: #0d9488; --vlm: #7c3aed; --storage: #059669;
+    --lineage: #d97706; --retrieval: #4f46e5; --validation: #dc2626;
+    --code-bg: #f0f3f6; --shadow: 0 2px 16px rgba(140,149,159,0.25);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; scroll-padding-top: 20px; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.6;
+    -webkit-font-smoothing: antialiased; display: flex;
+  }
+  code, pre, .mono { font-family: "SF Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace; }
+
+  /* ---- Sidebar ---- */
+  .sidebar {
+    width: var(--sidebar-w); flex-shrink: 0; height: 100vh; position: sticky; top: 0;
+    background: var(--bg-elev); border-right: 1px solid var(--border);
+    overflow-y: auto; padding: 20px 0; display: flex; flex-direction: column;
+  }
+  .sidebar-brand { padding: 0 20px 16px; border-bottom: 1px solid var(--border); }
+  .sidebar-brand h1 { font-size: 15px; letter-spacing: 0.5px; }
+  .sidebar-brand .sub { font-size: 11px; color: var(--text-dim); margin-top: 3px; text-transform: uppercase; letter-spacing: 1px; }
+  .sidebar-brand .badge { display:inline-block; margin-top:8px; font-size:10px; padding:2px 8px; border-radius:20px; background:var(--accent-soft); color:var(--accent); font-family:monospace;}
+  .search-wrap { padding: 14px 16px; }
+  .search-wrap input {
+    width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-size: 13px; outline: none;
+  }
+  .search-wrap input:focus { border-color: var(--accent); }
+  .nav { list-style: none; padding: 0 8px; flex: 1; }
+  .nav li a {
+    display: block; padding: 7px 12px; border-radius: 7px; color: var(--text-dim);
+    text-decoration: none; font-size: 13px; transition: all 0.12s;
+  }
+  .nav li a:hover { background: var(--bg-elev2); color: var(--text); }
+  .nav li a.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .nav .group-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-faint); padding: 12px 12px 4px; }
+
+  /* ---- Main ---- */
+  .main { flex: 1; min-width: 0; }
+  .topbar {
+    position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(10px); border-bottom: 1px solid var(--border);
+    padding: 12px 40px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  .topbar .crumb { font-size: 13px; color: var(--text-dim); }
+  .topbar .crumb b { color: var(--text); }
+  .topbar-actions { display: flex; gap: 8px; align-items: center; }
+  .btn {
+    padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elev);
+    color: var(--text-dim); font-size: 12px; cursor: pointer; transition: all 0.12s;
+  }
+  .btn:hover { color: var(--text); border-color: var(--accent); }
+  .content { max-width: 1080px; margin: 0 auto; padding: 40px; }
+
+  section { margin-bottom: 56px; scroll-margin-top: 70px; }
+  section > h2 {
+    font-size: 26px; margin-bottom: 6px; display: flex; align-items: center; gap: 10px;
+    padding-bottom: 10px; border-bottom: 2px solid var(--border);
+  }
+  section > h2 .sec-num { color: var(--text-faint); font-size: 18px; font-weight: 500; }
+  section > .lead { color: var(--text-dim); font-size: 15px; margin: 14px 0 24px; }
+  h3 { font-size: 18px; margin: 28px 0 12px; }
+  h4 { font-size: 14px; margin: 18px 0 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  p { margin: 10px 0; color: var(--text); }
+  .content a { color: var(--accent); }
+  ul, ol { margin: 10px 0 10px 22px; }
+  li { margin: 5px 0; }
+
+  /* ---- Cards / callouts ---- */
+  .card { background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; margin: 18px 0; }
+  .callout {
+    border-left: 4px solid var(--accent); background: var(--accent-soft);
+    padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 14px;
+  }
+  .callout.why { border-color: var(--lineage); background: color-mix(in srgb, var(--lineage) 10%, transparent); }
+  .callout.warn { border-color: var(--validation); background: color-mix(in srgb, var(--validation) 10%, transparent); }
+  .callout .tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 4px; }
+  .callout.why .tag { color: var(--lineage); }
+  .callout.warn .tag { color: var(--validation); }
+  .callout .tag.info { color: var(--accent); }
+
+  /* ---- Legend ---- */
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 16px 0; padding: 12px 16px; background: var(--bg-elev); border-radius: 8px; border: 1px solid var(--border); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); }
+  .legend .dot { width: 12px; height: 12px; border-radius: 3px; }
+
+  /* ---- Diagrams ---- */
+  .diagram { background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin: 18px 0; overflow-x: auto; }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .diagram .cap { text-align: center; font-size: 12px; color: var(--text-faint); margin-top: 12px; }
+  svg text { font-family: -apple-system, "Segoe UI", sans-serif; }
+  .flow-arrow { stroke-dasharray: 6 5; animation: flow 0.8s linear infinite; }
+  @keyframes flow { to { stroke-dashoffset: -22; } }
+  html.no-anim .flow-arrow { animation: none; }
+
+  /* ---- Tables ---- */
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--text-dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; background: var(--bg-elev); }
+  tbody tr:hover { background: var(--bg-elev); }
+  td code { background: var(--code-bg); padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+
+  /* ---- Code ---- */
+  .code-block { margin: 16px 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+  .code-head {
+    background: var(--bg-elev2); padding: 8px 14px; font-size: 12px; color: var(--text-dim);
+    display: flex; justify-content: space-between; cursor: pointer; user-select: none;
+  }
+  .code-head:hover { color: var(--text); }
+  .code-head .toggle { font-size: 11px; }
+  pre { background: var(--code-bg); padding: 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.5; }
+  pre code { color: var(--text); }
+  .code-block.collapsed pre { display: none; }
+  .kw { color: var(--vlm); } .str { color: var(--storage); } .cm { color: var(--text-faint); font-style: italic; } .fn { color: var(--accent); }
+
+  /* ---- Pills / status ---- */
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .pill.pass { background: color-mix(in srgb, var(--storage) 18%, transparent); color: var(--storage); }
+  .pill.warn { background: color-mix(in srgb, var(--lineage) 18%, transparent); color: var(--lineage); }
+  .pill.fail { background: color-mix(in srgb, var(--validation) 18%, transparent); color: var(--validation); }
+
+  /* ---- Collapsible sections ---- */
+  .collapse-head { cursor: pointer; user-select: none; }
+  .collapse-head::before { content: "▼"; font-size: 11px; color: var(--text-faint); margin-right: 8px; transition: transform 0.15s; display: inline-block; }
+  section.collapsed .collapse-head::before { transform: rotate(-90deg); }
+  section.collapsed .sec-body { display: none; }
+
+  /* ---- Dashboard ---- */
+  .dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin: 20px 0; }
+  .stat { background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+  .stat .num { font-size: 34px; font-weight: 700; line-height: 1; }
+  .stat .lbl { font-size: 12px; color: var(--text-dim); margin-top: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat.ok .num { color: var(--storage); } .stat.info .num { color: var(--accent); } .stat.warn .num { color: var(--lineage); }
+
+  .search-hidden { display: none !important; }
+  mark { background: var(--lineage); color: #000; padding: 0 2px; border-radius: 2px; }
+
+  @media (max-width: 900px) {
+    .sidebar { display: none; }
+    .content, .topbar { padding-left: 20px; padding-right: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <h1>Multi-Store RAG Chatbot</h1>
+    <div class="sub">Table Pipeline · Dev View</div>
+    <span class="badge">commit f36454d</span>
+  </div>
+  <div class="search-wrap"><input id="search" type="text" placeholder="Search components…" autocomplete="off"></div>
+  <ul class="nav" id="nav">
+    <li class="group-label">Architecture</li>
+    <li><a href="#overview">1 · Overview</a></li>
+    <li><a href="#ingestion">2 · Ingestion Pipeline</a></li>
+    <li><a href="#continuation">3 · Multi-page Continuation</a></li>
+    <li><a href="#spans">4 · Per-cell Span Model</a></li>
+    <li><a href="#vlm">5 · VLM Reconciliation</a></li>
+    <li class="group-label">Data & Lineage</li>
+    <li><a href="#lineage">6 · Lineage Flow</a></li>
+    <li><a href="#schema">7 · Database Schema (ER)</a></li>
+    <li class="group-label">Query</li>
+    <li><a href="#retrieval">8 · Retrieval Pipeline</a></li>
+    <li><a href="#structured">9 · Structured Query Engine</a></li>
+    <li class="group-label">Operations</li>
+    <li><a href="#worker">10 · Worker Lifecycle</a></li>
+    <li><a href="#gates">11 · Validation Gates</a></li>
+    <li><a href="#sequence">12 · Sequence Diagrams</a></li>
+    <li class="group-label">Evidence</li>
+    <li><a href="#validation">13 · Validation Evidence</a></li>
+    <li><a href="#limitations">14 · Known Limitations</a></li>
+    <li><a href="#summary">15 · Architecture Summary</a></li>
+  </ul>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div class="crumb">Multi-Store RAG Chatbot / <b>Table Pipeline Architecture</b> / Developer View</div>
+    <div class="topbar-actions">
+      <button class="btn" id="expandAll">Expand all</button>
+      <button class="btn" id="animToggle">⏸ Anim</button>
+      <button class="btn" id="themeToggle">☀ Light</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <div class="legend">
+      <span><i class="dot" style="background:var(--parsing)"></i>Parsing</span>
+      <span><i class="dot" style="background:var(--ocr)"></i>OCR</span>
+      <span><i class="dot" style="background:var(--vlm)"></i>VLM</span>
+      <span><i class="dot" style="background:var(--storage)"></i>Storage</span>
+      <span><i class="dot" style="background:var(--lineage)"></i>Lineage</span>
+      <span><i class="dot" style="background:var(--retrieval)"></i>Retrieval</span>
+      <span><i class="dot" style="background:var(--validation)"></i>Validation</span>
+    </div>
+
+    <!-- 1 OVERVIEW -->
+    <section id="overview">
+      <h2 class="collapse-head"><span class="sec-num">01</span> Overview</h2>
+      <div class="sec-body">
+        <p class="lead">Multi-Store RAG Chatbot's table pipeline turns tables inside a PDF into data that is <b>queryable</b>, <b>retrievable</b>, and <b>exactly computable</b>. Schema: <code>multi_store_rag_working</code>. All behaviour below is verified against a live Docker stack (API + Celery worker + Supabase/pgvector), not just unit-tested.</p>
+
+        <p>A table can be: extracted whole from one page (common); split across pages by Docling and <b>merged back into one logical table</b>; extracted with <b>rowspan/colspan/multi-row headers</b> captured as a structural span map; and queried two ways at once — <b>semantically</b> (embeddings) and <b>exactly</b> (a structured aggregate engine).</p>
+
+        <div class="diagram">
+          <svg viewBox="0 0 940 340" role="img" aria-label="Overall architecture">
+            <defs>
+              <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="var(--text-dim)"/></marker>
+            </defs>
+            <!-- ingest column -->
+            <rect x="20" y="20" width="240" height="300" rx="10" fill="none" stroke="var(--border)" stroke-dasharray="4 4"/>
+            <text x="140" y="44" text-anchor="middle" fill="var(--text-faint)" font-size="11" letter-spacing="1">INGESTION</text>
+            <g font-size="12" fill="#fff">
+              <rect x="50" y="58" width="180" height="34" rx="7" fill="var(--parsing)"/><text x="140" y="80" text-anchor="middle">PDF → Docling parse</text>
+              <rect x="50" y="100" width="180" height="34" rx="7" fill="var(--vlm)"/><text x="140" y="122" text-anchor="middle">Span detect + merge</text>
+              <rect x="50" y="142" width="180" height="34" rx="7" fill="var(--vlm)"/><text x="140" y="164" text-anchor="middle">VLM reconcile</text>
+              <rect x="50" y="184" width="180" height="34" rx="7" fill="var(--storage)"/><text x="140" y="206" text-anchor="middle">Enrich + store</text>
+              <rect x="50" y="226" width="180" height="34" rx="7" fill="var(--storage)"/><text x="140" y="248" text-anchor="middle">Chunk (row windows)</text>
+              <rect x="50" y="268" width="180" height="34" rx="7" fill="var(--validation)"/><text x="140" y="290" text-anchor="middle">Completion gates</text>
+            </g>
+            <line class="flow-arrow" x1="140" y1="92" x2="140" y2="100" stroke="var(--text-dim)" stroke-width="2" marker-end="url(#ah)"/>
+            <line class="flow-arrow" x1="140" y1="134" x2="140" y2="142" stroke="var(--text-dim)" stroke-width="2" marker-end="url(#ah)"/>
+            <line class="flow-arrow" x1="140" y1="176" x2="140" y2="184" stroke="var(--text-dim)" stroke-width="2" marker-end="url(#ah)"/>
+            <line class="flow-arrow" x1="140" y1="218" x2="140" y2="226" stroke="var(--text-dim)" stroke-width="2" marker-end="url(#ah)"/>
+            <line class="flow-arrow" x1="140" y1="260" x2="140" y2="268" stroke="var(--text-dim)" stroke-width="2" marker-end="url(#ah)"/>
+
+            <!-- store column -->
+            <rect x="360" y="20" width="220" height="300" rx="10" fill="none" stroke="var(--border)" stroke-dasharray="4 4"/>
+            <text x="470" y="44" text-anchor="middle" fill="var(--text-faint)" font-size="11" letter-spacing="1">POSTGRES / pgvector</text>
+            <g font-size="12" fill="#fff">
+              <rect x="385" y="66" width="170" height="30" rx="6" fill="var(--lineage)"/><text x="470" y="86" text-anchor="middle">document_registry</text>
+              <rect x="385" y="104" width="170" height="30" rx="6" fill="var(--lineage)"/><text x="470" y="124" text-anchor="middle">image_store</text>
+              <rect x="385" y="142" width="170" height="30" rx="6" fill="var(--storage)"/><text x="470" y="162" text-anchor="middle">table_store</text>
+              <rect x="385" y="180" width="170" height="30" rx="6" fill="var(--storage)"/><text x="470" y="200" text-anchor="middle">table_chunk_store</text>
+              <rect x="385" y="218" width="170" height="30" rx="6" fill="var(--retrieval)"/><text x="470" y="238" text-anchor="middle">embeddings (1024-d)</text>
+              <rect x="385" y="256" width="170" height="30" rx="6" fill="var(--lineage)"/><text x="470" y="276" text-anchor="middle">ingestion_jobs</text>
+            </g>
+            <line class="flow-arrow" x1="260" y1="243" x2="385" y2="195" stroke="var(--text-dim)" stroke-width="2" marker-end="url(#ah)"/>
+
+            <!-- query column -->
+            <rect x="680" y="20" width="240" height="300" rx="10" fill="none" stroke="var(--border)" stroke-dasharray="4 4"/>
+            <text x="800" y="44" text-anchor="middle" fill="var(--text-faint)" font-size="11" letter-spacing="1">QUERY</text>
+            <g font-size="12" fill="#fff">
+              <rect x="710" y="80" width="180" height="34" rx="7" fill="var(--retrieval)"/><text x="800" y="102" text-anchor="middle">Semantic retrieval</text>
+              <rect x="710" y="128" width="180" height="34" rx="7" fill="var(--retrieval)"/><text x="800" y="150" text-anchor="middle">Structured engine</text>
+              <rect x="710" y="176" width="180" height="34" rx="7" fill="var(--vlm)"/><text x="800" y="198" text-anchor="middle">Gemma synthesis</text>
+              <rect x="710" y="224" width="180" height="34" rx="7" fill="var(--storage)"/><text x="800" y="246" text-anchor="middle">Cited answer</text>
+            </g>
+            <line class="flow-arrow" x1="580" y1="233" x2="710" y2="150" stroke="var(--text-dim)" stroke-width="2" marker-end="url(#ah)"/>
+            <line class="flow-arrow" x1="800" y1="114" x2="800" y2="128" stroke="var(--text-dim)" stroke-width="2" marker-end="url(#ah)"/>
+            <line class="flow-arrow" x1="800" y1="162" x2="800" y2="176" stroke="var(--text-dim)" stroke-width="2" marker-end="url(#ah)"/>
+            <line class="flow-arrow" x1="800" y1="210" x2="800" y2="224" stroke="var(--text-dim)" stroke-width="2" marker-end="url(#ah)"/>
+          </svg>
+          <div class="cap">Figure 1 — Overall architecture: ingestion → multi-store Postgres → dual-path query.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 INGESTION -->
+    <section id="ingestion">
+      <h2 class="collapse-head"><span class="sec-num">02</span> Ingestion Pipeline</h2>
+      <div class="sec-body">
+        <p class="lead">Twelve stages, PDF only. Parsing is page-chunked (bounded memory, live progress) with a whole-document Docling fallback and a PyMuPDF last resort.</p>
+
+        <div class="diagram">
+          <svg viewBox="0 0 920 620" role="img" aria-label="Ingestion pipeline">
+            <defs><marker id="ah2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="var(--text-dim)"/></marker></defs>
+            <g font-size="13" fill="#fff" text-anchor="middle">
+              <rect x="330" y="14" width="260" height="38" rx="8" fill="var(--parsing)"/><text x="460" y="38">PDF Upload → Supabase Storage</text>
+              <rect x="330" y="70" width="260" height="38" rx="8" fill="var(--lineage)"/><text x="460" y="94">Document Registration</text>
+              <rect x="330" y="126" width="260" height="38" rx="8" fill="var(--parsing)"/><text x="460" y="150">Docling parse (chunk size 1–8)</text>
+              <rect x="330" y="182" width="260" height="38" rx="8" fill="var(--ocr)"/><text x="460" y="206">OCR (DOCLING_DO_OCR)</text>
+              <rect x="330" y="238" width="260" height="38" rx="8" fill="var(--vlm)"/><text x="460" y="262">Span detect + multi-row header</text>
+              <rect x="330" y="294" width="260" height="38" rx="8" fill="var(--vlm)"/><text x="460" y="318">Continuation merge</text>
+              <rect x="330" y="350" width="260" height="38" rx="8" fill="var(--vlm)"/><text x="460" y="374">VLM reconciliation + gate</text>
+              <rect x="330" y="406" width="260" height="38" rx="8" fill="var(--storage)"/><text x="460" y="430">Enrichment (FY, currency, category)</text>
+              <rect x="330" y="462" width="260" height="38" rx="8" fill="var(--storage)"/><text x="460" y="486">table_store + table_chunk_store</text>
+              <rect x="330" y="518" width="260" height="38" rx="8" fill="var(--retrieval)"/><text x="460" y="542">BGE embeddings (1024-d)</text>
+              <rect x="330" y="574" width="260" height="38" rx="8" fill="var(--validation)"/><text x="460" y="598">Completion gates → status</text>
+            </g>
+            <g stroke="var(--text-dim)" stroke-width="2" marker-end="url(#ah2)">
+              <line class="flow-arrow" x1="460" y1="52" x2="460" y2="70"/>
+              <line class="flow-arrow" x1="460" y1="108" x2="460" y2="126"/>
+              <line class="flow-arrow" x1="460" y1="164" x2="460" y2="182"/>
+              <line class="flow-arrow" x1="460" y1="220" x2="460" y2="238"/>
+              <line class="flow-arrow" x1="460" y1="276" x2="460" y2="294"/>
+              <line class="flow-arrow" x1="460" y1="332" x2="460" y2="350"/>
+              <line class="flow-arrow" x1="460" y1="388" x2="460" y2="406"/>
+              <line class="flow-arrow" x1="460" y1="444" x2="460" y2="462"/>
+              <line class="flow-arrow" x1="460" y1="500" x2="460" y2="518"/>
+              <line class="flow-arrow" x1="460" y1="556" x2="460" y2="574"/>
+            </g>
+            <!-- side annotations -->
+            <g font-size="10.5" fill="var(--text-faint)" text-anchor="start">
+              <text x="610" y="150">document_parser.py</text>
+              <text x="610" y="262">_detect_merged_cells()</text>
+              <text x="610" y="318">_merge_continued_tables()</text>
+              <text x="610" y="374">table_reconstruction.py</text>
+              <text x="610" y="486">storage_service._store_tables()</text>
+              <text x="610" y="598">_find_table_lineage_gap / _find_table_count_mismatch</text>
+            </g>
+          </svg>
+          <div class="cap">Figure 2 — Full ingestion pipeline, colour-coded by concern.</div>
+        </div>
+
+        <div class="callout why"><span class="tag">Why page-chunked parsing</span>Docling loads a 1.3 GB model set; converting a huge PDF whole-document risks unbounded memory. <code>_adaptive_chunk_size()</code> keeps ≤8 pages in flight and yields ~25–40 live progress updates. Trade-off: it converts small docs (≤25 pages) one page at a time — which is <em>why</em> multi-page tables split and need re-merging.</p>
+
+        <div class="code-block collapsed">
+          <div class="code-head"><span>_adaptive_chunk_size — document_parser.py:668</span><span class="toggle">show ▾</span></div>
+          <pre><code><span class="kw">def</span> <span class="fn">_adaptive_chunk_size</span>(total_pages: int) -> int:
+    <span class="cm"># 5p→1, 50p→2, 200p→8, 1000p→8 : ≤8 pages in flight</span>
+    <span class="kw">if</span> total_pages <= 1:
+        <span class="kw">return</span> 1
+    <span class="kw">return</span> max(1, min(8, math.ceil(total_pages / 25)))</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 CONTINUATION -->
+    <section id="continuation">
+      <h2 class="collapse-head"><span class="sec-num">03</span> Multi-page Continuation</h2>
+      <div class="sec-body">
+        <p class="lead">Docling emits one table object per physical page-appearance. <code>_merge_continued_tables()</code> stitches consecutive-page fragments with identical headers back into one logical table before storage.</p>
+
+        <div class="diagram">
+          <svg viewBox="0 0 900 300" role="img" aria-label="Continuation merge">
+            <defs><marker id="ah3" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="var(--text-dim)"/></marker></defs>
+            <g font-size="12" fill="#fff" text-anchor="middle">
+              <rect x="30" y="70" width="150" height="60" rx="8" fill="var(--parsing)"/><text x="105" y="95">Fragment A</text><text x="105" y="115" font-size="10">page 1 · rows 1–28</text>
+              <rect x="30" y="140" width="150" height="60" rx="8" fill="var(--parsing)"/><text x="105" y="165">Fragment B</text><text x="105" y="185" font-size="10">page 2 · rows 29–59</text>
+              <rect x="30" y="210" width="150" height="60" rx="8" fill="var(--parsing)"/><text x="105" y="235">Fragment C</text><text x="105" y="255" font-size="10">page 3 · rows 60–70</text>
+            </g>
+            <rect x="330" y="110" width="230" height="120" rx="10" fill="none" stroke="var(--lineage)" stroke-width="2"/>
+            <text x="445" y="100" text-anchor="middle" fill="var(--lineage)" font-size="12">_merge_continued_tables()</text>
+            <g font-size="11" fill="var(--text-dim)" text-anchor="middle">
+              <text x="445" y="140">B.page == A.page + 1</text>
+              <text x="445" y="162">A.headers == B.headers</text>
+              <text x="445" y="184">row width == len(headers)</text>
+              <text x="445" y="212" fill="var(--text-faint)">chained transitively A→B→C</text>
+            </g>
+            <g stroke="var(--text-dim)" stroke-width="2" marker-end="url(#ah3)">
+              <line class="flow-arrow" x1="180" y1="100" x2="330" y2="150"/>
+              <line class="flow-arrow" x1="180" y1="170" x2="330" y2="170"/>
+              <line class="flow-arrow" x1="180" y1="240" x2="330" y2="190"/>
+            </g>
+            <g font-size="12" fill="#fff" text-anchor="middle">
+              <rect x="680" y="115" width="190" height="110" rx="10" fill="var(--storage)"/>
+              <text x="775" y="145">1 logical table</text>
+              <text x="775" y="168" font-size="10">70 rows · table_index=0</text>
+              <text x="775" y="188" font-size="10">row_page_numbers=</text>
+              <text x="775" y="204" font-size="10">[1×28, 2×31, 3×11]</text>
+            </g>
+            <line class="flow-arrow" x1="560" y1="170" x2="680" y2="170" stroke="var(--text-dim)" stroke-width="2" marker-end="url(#ah3)"/>
+          </svg>
+          <div class="cap">Figure 3 — Three page-fragments → one merged table with per-row page provenance.</div>
+        </div>
+
+        <h4>Merge rule (exact)</h4>
+        <p>Tables sorted by <code>(page_number, table_index)</code>. Adjacent A→B merge iff <b>all three</b> hold: (1) <code>B.page_number == A.page_number + 1</code>, (2) <code>A.headers == B.headers</code> exactly, (3) every row length equals <code>len(headers)</code>. Greedy left-to-right, transitive.</p>
+
+        <h4>What a merge produces</h4>
+        <ul>
+          <li><code>rows</code> = concatenation in page order; <code>row_page_numbers</code> = per-row origin page (new <code>ExtractedTable</code> field, <code>None</code> for unmerged — full back-compat).</li>
+          <li><code>page_number</code>, <code>bbox</code>, <code>image_png_bytes</code> = first fragment's (representative). One crop image per logical table, not per fragment.</li>
+          <li><code>table_metadata["continuation"]</code> = <code>{is_continuation, fragment_count, fragment_pages, fragment_table_indices}</code>. Unmerged tables get no such key.</li>
+          <li><code>table_index</code> renumbered contiguously; span map keeps only the first fragment's (page-local offsets can't concatenate).</li>
+        </ul>
+
+        <div class="callout warn"><span class="tag">Accepted false positive</span>Two <em>unrelated</em> tables with identical headers on strictly consecutive pages will merge — no semantic-dissimilarity guard. Deliberate simplicity trade-off. Continuation is PDF-only (not wired into DOCX/PPTX/XLSX/HTML/MD).</p>
+      </div>
+    </section>
+
+    <!-- 4 SPANS -->
+    <section id="spans">
+      <h2 class="collapse-head"><span class="sec-num">04</span> Per-cell Span Model</h2>
+      <div class="sec-body">
+        <p class="lead"><code>_detect_merged_cells()</code> reads Docling's raw <code>table.data.table_cells</code> — <b>not</b> the dense <code>grid</code>, which duplicates a spanned cell's text into every covered position and always reports uniform widths. This was the key finding that unlocked genuine span detection.</p>
+
+        <div class="diagram">
+          <svg viewBox="0 0 760 260" role="img" aria-label="Span model">
+            <g font-size="11">
+              <!-- grid depiction -->
+              <text x="140" y="24" text-anchor="middle" fill="var(--text-dim)" font-size="12">Visual table</text>
+              <rect x="40" y="34" width="200" height="30" fill="var(--vlm)" opacity="0.85"/><text x="140" y="54" text-anchor="middle" fill="#fff">Q1 2024 (col_span=2)</text>
+              <rect x="40" y="66" width="100" height="26" fill="var(--vlm)" opacity="0.55"/><text x="90" y="83" text-anchor="middle" fill="#fff">Budget</text>
+              <rect x="142" y="66" width="98" height="26" fill="var(--vlm)" opacity="0.55"/><text x="191" y="83" text-anchor="middle" fill="#fff">Actual</text>
+              <rect x="40" y="94" width="100" height="26" fill="var(--bg-elev2)" stroke="var(--border)"/><text x="90" y="111" text-anchor="middle" fill="var(--text)">100</text>
+              <rect x="142" y="94" width="98" height="26" fill="var(--bg-elev2)" stroke="var(--border)"/><text x="191" y="111" text-anchor="middle" fill="var(--text)">90</text>
+            </g>
+            <text x="140" y="150" text-anchor="middle" fill="var(--lineage)" font-size="11">header_row_count = 2</text>
+            <line class="flow-arrow" x1="260" y1="80" x2="330" y2="80" stroke="var(--text-dim)" stroke-width="2" marker-end="url(#ah3)"/>
+            <g font-size="10.5" fill="var(--text)">
+              <text x="345" y="40" fill="var(--text-dim)" font-size="12">table_metadata.merged_cells</text>
+              <rect x="345" y="52" width="390" height="180" rx="8" fill="var(--code-bg)" stroke="var(--border)"/>
+              <text x="360" y="76" class="mono">has_merged_cells: true</text>
+              <text x="360" y="96" class="mono">max_col_span: 2 · max_row_span: 1</text>
+              <text x="360" y="116" class="mono">header_row_count: 2</text>
+              <text x="360" y="140" class="mono">cells: [</text>
+              <text x="378" y="158" class="mono">{row 0–1, col 2–4, "Q1 2024",</text>
+              <text x="392" y="174" class="mono">is_header: true}, … ]</text>
+              <text x="360" y="204" fill="var(--storage)" font-size="10.5">→ headers combined:</text>
+              <text x="360" y="220" class="mono" fill="var(--storage)">"Q1 2024 - Budget", "Q1 2024 - Actual"</text>
+            </g>
+          </svg>
+          <div class="cap">Figure 4 — Span geometry captured; multi-row header combined into single column labels.</div>
+        </div>
+
+        <div class="callout why"><span class="tag">Why this fixed a real bug</span>Previously only grid row 0 was treated as the header. A genuine 2-row header silently misclassified its second row as a <em>data</em> row — corrupting <code>row_count</code> and leaking header fragments into searchable text. Now detected via Docling's own <code>column_header</code> flag, never by row-content heuristics.</p>
+        <p><b>Docling attrs verified</b> (docling-core 2.74.0): <code>row_span</code>, <code>col_span</code>, <code>start/end_row_offset_idx</code> (0-based, <b>exclusive</b>), <code>column_header: bool</code>. <b>Format gap:</b> DOCX/PPTX/XLSX/MD backends never set <code>column_header</code> → <code>header_row_count</code> stays 0 for those.</p>
+      </div>
+    </section>
+
+    <!-- 5 VLM -->
+    <section id="vlm">
+      <h2 class="collapse-head"><span class="sec-num">05</span> VLM Reconciliation & Faithfulness Gate</h2>
+      <div class="sec-body">
+        <p class="lead"><code>table_reconstruction.py</code> re-runs the multimodal VLM on each crop, then decides Docling-vs-VLM via a three-tier numeric-faithfulness gate that rejects hallucinated numbers.</p>
+        <table>
+          <thead><tr><th>Docling grid</th><th>Merged cells?</th><th>Tolerance for VLM-introduced unseen numbers</th></tr></thead>
+          <tbody>
+            <tr><td>Well-formed (uniform)</td><td>No</td><td><b>0%</b> — any unseen number rejects the VLM</td></tr>
+            <tr><td>Well-formed</td><td>Yes</td><td><b>8%</b> <code>_MERGED_CELL_TOLERANCE</code> — merged grids look uniform but are structurally richer</td></tr>
+            <tr><td>Ragged</td><td>either</td><td><b>20%</b> <code>_FAITHFULNESS_TOLERANCE</code> — no reliable native structure</td></tr>
+          </tbody>
+        </table>
+        <div class="callout"><span class="tag info">Signal source</span><code>has_merged_cells</code> comes from <code>table_metadata.merged_cells.has_merged_cells</code>, fail-open to <code>false</code> if absent — so the span model (§4) directly drives which tolerance tier a table gets.</p>
+      </div>
+    </section>
+
+    <!-- 6 LINEAGE -->
+    <section id="lineage">
+      <h2 class="collapse-head"><span class="sec-num">06</span> Lineage Flow</h2>
+      <div class="sec-body">
+        <p class="lead">Every stored row traces back to its PDF origin. Image, table, and chunk lineage are all 1:1 or clean 1:many — verified live end-to-end, hop by hop.</p>
+
+        <div class="diagram">
+          <svg viewBox="0 0 900 380" role="img" aria-label="Lineage flow">
+            <defs><marker id="ahl" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="var(--lineage)"/></marker></defs>
+            <g font-size="12" fill="#fff" text-anchor="middle">
+              <rect x="360" y="12" width="180" height="34" rx="7" fill="var(--parsing)"/><text x="450" y="34">PDF pages 1–3</text>
+              <rect x="360" y="66" width="180" height="34" rx="7" fill="var(--vlm)"/><text x="450" y="88">merge → 1 ExtractedTable</text>
+              <rect x="150" y="132" width="200" height="46" rx="7" fill="var(--lineage)"/><text x="250" y="152">image_store</text><text x="250" y="170" font-size="10">asset_role='table_crop'</text>
+              <rect x="550" y="132" width="200" height="46" rx="7" fill="var(--storage)"/><text x="650" y="152">table_store (id=X)</text><text x="650" y="170" font-size="10">row_count=70</text>
+              <rect x="550" y="204" width="200" height="34" rx="7" fill="var(--storage)"/><text x="650" y="226">table_chunk_store</text>
+              <rect x="550" y="258" width="200" height="34" rx="7" fill="var(--retrieval)"/><text x="650" y="280">embeddings (per window)</text>
+              <rect x="550" y="312" width="200" height="34" rx="7" fill="var(--retrieval)"/><text x="650" y="334">RetrievedChunk → CitationItem</text>
+            </g>
+            <g stroke="var(--lineage)" stroke-width="2" marker-end="url(#ahl)">
+              <line class="flow-arrow" x1="450" y1="46" x2="450" y2="66"/>
+              <line class="flow-arrow" x1="410" y1="100" x2="270" y2="132"/>
+              <line class="flow-arrow" x1="490" y1="100" x2="630" y2="132"/>
+              <line class="flow-arrow" x1="650" y1="178" x2="650" y2="204"/>
+              <line class="flow-arrow" x1="650" y1="238" x2="650" y2="258"/>
+              <line class="flow-arrow" x1="650" y1="292" x2="650" y2="312"/>
+            </g>
+            <line x1="550" y1="155" x2="350" y2="155" stroke="var(--lineage)" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#ahl)"/>
+            <text x="450" y="200" text-anchor="middle" fill="var(--lineage)" font-size="10.5">source_image_id  (FK, 1:1)</text>
+          </svg>
+          <div class="cap">Figure 5 — PDF → merged table → crop image (1:1) + chunks (1:many) → embeddings → citation.</div>
+        </div>
+        <p><b>Key relationship:</b> <code>table_store.source_image_id → image_store.id</code>, unique 1:1, <code>asset_role='table_crop'</code>. Because merging happens upstream in the parser, exactly one crop exists per logical table.</p>
+      </div>
+    </section>
+
+    <!-- 7 SCHEMA -->
+    <section id="schema">
+      <h2 class="collapse-head"><span class="sec-num">07</span> Database Schema (ER)</h2>
+      <div class="sec-body">
+        <p class="lead">All additive — no breaking changes across the entire effort. New this effort: <code>ingestion_jobs.worker_id/code_version</code> (migration 015); JSONB extensions to <code>table_metadata</code> and <code>chunk_metadata</code>.</p>
+
+        <div class="diagram">
+          <svg viewBox="0 0 900 470" role="img" aria-label="ER diagram">
+            <defs><marker id="ahe" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--lineage)"/></marker></defs>
+            <!-- document_registry -->
+            <g>
+              <rect x="330" y="12" width="240" height="96" rx="8" fill="var(--bg-elev2)" stroke="var(--lineage)" stroke-width="1.5"/>
+              <rect x="330" y="12" width="240" height="26" rx="8" fill="var(--lineage)"/><text x="450" y="30" text-anchor="middle" fill="#fff" font-size="12.5">document_registry</text>
+              <text x="344" y="56" fill="var(--text)" font-size="10.5" class="mono">PK id UUID</text>
+              <text x="344" y="74" fill="var(--text-dim)" font-size="10.5" class="mono">status · error_stage</text>
+              <text x="344" y="92" fill="var(--text-dim)" font-size="10.5" class="mono">page_count · has_tables</text>
+            </g>
+            <!-- ingestion_jobs -->
+            <g>
+              <rect x="620" y="12" width="250" height="112" rx="8" fill="var(--bg-elev2)" stroke="var(--lineage)" stroke-width="1.5"/>
+              <rect x="620" y="12" width="250" height="26" rx="8" fill="var(--lineage)"/><text x="745" y="30" text-anchor="middle" fill="#fff" font-size="12.5">ingestion_jobs</text>
+              <text x="634" y="56" fill="var(--text)" font-size="10.5" class="mono">PK id · FK document_id</text>
+              <text x="634" y="74" fill="var(--text-dim)" font-size="10.5" class="mono">current_stage · stage_timings</text>
+              <text x="634" y="92" fill="var(--storage)" font-size="10.5" class="mono">worker_id  ★015</text>
+              <text x="634" y="110" fill="var(--storage)" font-size="10.5" class="mono">code_version  ★015</text>
+            </g>
+            <!-- image_store -->
+            <g>
+              <rect x="30" y="180" width="250" height="112" rx="8" fill="var(--bg-elev2)" stroke="var(--lineage)" stroke-width="1.5"/>
+              <rect x="30" y="180" width="250" height="26" rx="8" fill="var(--lineage)"/><text x="155" y="198" text-anchor="middle" fill="#fff" font-size="12.5">image_store</text>
+              <text x="44" y="224" fill="var(--text)" font-size="10.5" class="mono">PK id · FK document_id</text>
+              <text x="44" y="242" fill="var(--text-dim)" font-size="10.5" class="mono">asset_role (table_crop|figure)</text>
+              <text x="44" y="260" fill="var(--text-dim)" font-size="10.5" class="mono">stored_in · vlm_ocr_text</text>
+              <text x="44" y="278" fill="var(--text-dim)" font-size="10.5" class="mono">structured_content</text>
+            </g>
+            <!-- table_store -->
+            <g>
+              <rect x="330" y="170" width="250" height="150" rx="8" fill="var(--bg-elev2)" stroke="var(--storage)" stroke-width="1.5"/>
+              <rect x="330" y="170" width="250" height="26" rx="8" fill="var(--storage)"/><text x="455" y="188" text-anchor="middle" fill="#fff" font-size="12.5">table_store</text>
+              <text x="344" y="214" fill="var(--text)" font-size="10.5" class="mono">PK id · FK document_id</text>
+              <text x="344" y="232" fill="var(--lineage)" font-size="10.5" class="mono">FK source_image_id (1:1)</text>
+              <text x="344" y="250" fill="var(--text-dim)" font-size="10.5" class="mono">json_data · row_count</text>
+              <text x="344" y="268" fill="var(--text-dim)" font-size="10.5" class="mono">extraction_method/quality</text>
+              <text x="344" y="286" fill="var(--vlm)" font-size="10.5" class="mono">table_metadata JSONB:</text>
+              <text x="356" y="302" fill="var(--text-faint)" font-size="9.5" class="mono">merged_cells · continuation</text>
+              <text x="356" y="315" fill="var(--text-faint)" font-size="9.5" class="mono">row_page_numbers</text>
+            </g>
+            <!-- table_chunk_store -->
+            <g>
+              <rect x="330" y="360" width="250" height="96" rx="8" fill="var(--bg-elev2)" stroke="var(--storage)" stroke-width="1.5"/>
+              <rect x="330" y="360" width="250" height="26" rx="8" fill="var(--storage)"/><text x="455" y="378" text-anchor="middle" fill="#fff" font-size="12.5">table_chunk_store</text>
+              <text x="344" y="404" fill="var(--text)" font-size="10.5" class="mono">PK id · FK table_id</text>
+              <text x="344" y="422" fill="var(--text-dim)" font-size="10.5" class="mono">row_start · row_end · embedding</text>
+              <text x="344" y="440" fill="var(--vlm)" font-size="10.5" class="mono">chunk_metadata: page_start/end</text>
+            </g>
+            <!-- relationships -->
+            <g stroke="var(--lineage)" stroke-width="1.6" fill="none" marker-end="url(#ahe)">
+              <path d="M450,108 L450,170"/>
+              <path d="M570,60 L620,60"/>
+              <path d="M330,240 L280,236"/>
+              <path d="M455,320 L455,360"/>
+            </g>
+            <g font-size="9.5" fill="var(--text-faint)">
+              <text x="458" y="140">1:many</text>
+              <text x="575" y="52">1:many</text>
+              <text x="285" y="224">1:1</text>
+              <text x="462" y="345">1:many</text>
+            </g>
+          </svg>
+          <div class="cap">Figure 6 — Entity relationships. ★015 marks columns added by migration 015.</div>
+        </div>
+
+        <table>
+          <thead><tr><th>Table</th><th>Key columns (this effort)</th><th>Relationship</th></tr></thead>
+          <tbody>
+            <tr><td><code>document_registry</code></td><td><code>status</code> gains <code>completed_with_errors</code>; <code>error_stage/message</code></td><td>parent of all</td></tr>
+            <tr><td><code>ingestion_jobs</code></td><td><code>worker_id</code>, <code>code_version</code> (mig 015)</td><td>1:many ← registry</td></tr>
+            <tr><td><code>image_store</code></td><td><code>asset_role='table_crop'</code></td><td>1:1 ← table_store.source_image_id</td></tr>
+            <tr><td><code>table_store</code></td><td><code>table_metadata.{merged_cells,continuation,row_page_numbers}</code></td><td>1:many ← registry</td></tr>
+            <tr><td><code>table_chunk_store</code></td><td><code>chunk_metadata.{page_start,page_end}</code></td><td>1:many ← table_store</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 8 RETRIEVAL -->
+    <section id="retrieval">
+      <h2 class="collapse-head"><span class="sec-num">08</span> Retrieval Pipeline</h2>
+      <div class="sec-body">
+        <p class="lead">Two parallel, independently-gated paths per query — never mutually exclusive. Semantic (embeddings, multi-window) and structured (exact aggregate) both run; results feed one synthesis prompt.</p>
+        <div class="diagram">
+          <svg viewBox="0 0 900 300" role="img" aria-label="Retrieval pipeline">
+            <defs><marker id="ahr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="var(--text-dim)"/></marker></defs>
+            <g font-size="12" fill="#fff" text-anchor="middle">
+              <rect x="370" y="16" width="160" height="36" rx="8" fill="var(--retrieval)"/><text x="450" y="39">User query</text>
+              <rect x="120" y="100" width="240" height="80" rx="8" fill="var(--retrieval)"/><text x="240" y="126">Semantic: _query_table_store</text><text x="240" y="146" font-size="10">child ANN, top-K windows/table</text><text x="240" y="164" font-size="10">page_number + page_number_end</text>
+              <rect x="540" y="100" width="240" height="80" rx="8" fill="var(--retrieval)"/><text x="660" y="126">Structured: try_structured_query</text><text x="660" y="146" font-size="10">SUM/AVG/COUNT/MIN/MAX/lookup</text><text x="660" y="164" font-size="10">null → semantic path unchanged</text>
+              <rect x="330" y="220" width="240" height="36" rx="8" fill="var(--vlm)"/><text x="450" y="243">Gemma synthesis → cited answer</text>
+            </g>
+            <g stroke="var(--text-dim)" stroke-width="2" marker-end="url(#ahr)">
+              <line class="flow-arrow" x1="420" y1="52" x2="270" y2="100"/>
+              <line class="flow-arrow" x1="480" y1="52" x2="630" y2="100"/>
+              <line class="flow-arrow" x1="270" y1="180" x2="410" y2="220"/>
+              <line class="flow-arrow" x1="630" y1="180" x2="490" y2="220"/>
+            </g>
+          </svg>
+          <div class="cap">Figure 7 — Dual-path retrieval converging on one synthesis prompt.</div>
+        </div>
+        <p><b>Multi-window:</b> deduped per <code>table_id</code> to the top-K closest windows (<code>TABLE_MAX_WINDOWS_PER_QUERY_RESULT</code>, default 2). Generic to <code>table_id</code> — needed no change for continuation-merged tables. <code>_resolve_chunk_page_range()</code> reads <code>chunk_metadata.page_start/end</code> defensively → <code>RetrievedChunk.page_number_end</code> (null for single-page).</p>
+      </div>
+    </section>
+
+    <!-- 9 STRUCTURED -->
+    <section id="structured">
+      <h2 class="collapse-head"><span class="sec-num">09</span> Structured Query Engine</h2>
+      <div class="sec-body">
+        <p class="lead">Deterministic, non-LLM, rule-based exact aggregation. Additive: returns <code>None</code> when no aggregate intent → semantic path byte-for-byte unchanged. Gated by <code>STRUCTURED_QUERY_ENABLED</code>.</p>
+        <div class="diagram">
+          <svg viewBox="0 0 880 250" role="img" aria-label="Structured query engine">
+            <defs><marker id="ahs" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="var(--text-dim)"/></marker></defs>
+            <g font-size="11.5" fill="#fff" text-anchor="middle">
+              <rect x="20" y="100" width="140" height="46" rx="8" fill="var(--retrieval)"/><text x="90" y="120">query text</text><text x="90" y="138" font-size="10">+doc filter</text>
+              <rect x="200" y="100" width="150" height="46" rx="8" fill="var(--retrieval)"/><text x="275" y="120">intent detect</text><text x="275" y="138" font-size="10">SUM/AVG/… regex</text>
+              <rect x="390" y="100" width="150" height="46" rx="8" fill="var(--retrieval)"/><text x="465" y="120">column resolve</text><text x="465" y="138" font-size="10">fuzzy vs headers</text>
+              <rect x="580" y="100" width="150" height="46" rx="8" fill="var(--storage)"/><text x="655" y="120">compute over</text><text x="655" y="138" font-size="10">table_store.json_data</text>
+              <rect x="760" y="100" width="100" height="46" rx="8" fill="var(--vlm)"/><text x="810" y="120">structured</text><text x="810" y="138" font-size="10">_result</text>
+            </g>
+            <g stroke="var(--text-dim)" stroke-width="2" marker-end="url(#ahs)">
+              <line class="flow-arrow" x1="160" y1="123" x2="200" y2="123"/>
+              <line class="flow-arrow" x1="350" y1="123" x2="390" y2="123"/>
+              <line class="flow-arrow" x1="540" y1="123" x2="580" y2="123"/>
+              <line class="flow-arrow" x1="730" y1="123" x2="760" y2="123"/>
+            </g>
+            <text x="275" y="185" text-anchor="middle" fill="var(--validation)" font-size="10.5">no intent → return None → semantic path only</text>
+          </svg>
+          <div class="cap">Figure 8 — SUM over a continuation-merged table sums all pages' rows for free (json_data is per-logical-table).</div>
+        </div>
+        <div class="callout warn"><span class="tag">Known gaps (follow-up, non-blocking)</span>(1) <code>_extract_target_column</code>'s verbatim-substring fast path can false-positive on plurals ("months" matches a "Month" column). Fix: word-boundary match. (2) <code>/query/stream</code> with <code>AGENTIC_RAG_ENABLED=True</code> (non-default) never reaches the structured call. (3) Single-table only — no cross-table aggregate.</p>
+      </div>
+    </section>
+
+    <!-- 10 WORKER -->
+    <section id="worker">
+      <h2 class="collapse-head"><span class="sec-num">10</span> Worker Lifecycle & Identity</h2>
+      <div class="sec-body">
+        <p class="lead"><code>worker_identity.py</code> stamps <code>worker_id</code> + <code>code_version</code> into every job so any divergence between worker processes/versions is diagnosable from the DB alone.</p>
+        <div class="diagram">
+          <svg viewBox="0 0 880 210" role="img" aria-label="Worker lifecycle">
+            <defs><marker id="ahw" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="var(--text-dim)"/></marker></defs>
+            <g font-size="11.5" fill="#fff" text-anchor="middle">
+              <rect x="20" y="80" width="150" height="46" rx="8" fill="var(--lineage)"/><text x="95" y="100">import time</text><text x="95" y="118" font-size="10">CODE_VERSION, WORKER_ID</text>
+              <rect x="210" y="80" width="150" height="46" rx="8" fill="var(--lineage)"/><text x="285" y="100">task start</text><text x="285" y="118" font-size="10">_stamp_worker_identity()</text>
+              <rect x="400" y="80" width="150" height="46" rx="8" fill="var(--storage)"/><text x="475" y="100">ingestion_jobs</text><text x="475" y="118" font-size="10">worker_id/code_version</text>
+              <rect x="590" y="80" width="150" height="46" rx="8" fill="var(--validation)"/><text x="665" y="100">error message</text><text x="665" y="118" font-size="10">names the worker</text>
+            </g>
+            <g stroke="var(--text-dim)" stroke-width="2" marker-end="url(#ahw)">
+              <line class="flow-arrow" x1="170" y1="103" x2="210" y2="103"/>
+              <line class="flow-arrow" x1="360" y1="103" x2="400" y2="103"/>
+              <line class="flow-arrow" x1="550" y1="103" x2="590" y2="103"/>
+            </g>
+            <text x="95" y="160" text-anchor="middle" fill="var(--text-faint)" font-size="10">git rev-parse --short HEAD, 2s timeout,</text>
+            <text x="95" y="174" text-anchor="middle" fill="var(--text-faint)" font-size="10">fallback 'unknown' — never blocks ingest</text>
+          </svg>
+          <div class="cap">Figure 9 — Worker identity stamped at first status update, wrapped so a pre-migration env never fails ingestion.</div>
+        </div>
+        <div class="callout why"><span class="tag">Why it exists — a real incident</span>A stray native Celery worker running <em>stale</em> code shared the Redis queue with the Docker worker. Task delivery is nondeterministic per-task, so identical re-ingestions silently alternated between correct (merged) and broken (unmerged) output — both reporting <code>completed</code>, no distinguishing signal. Stamping + the count-mismatch gate (§11) together close this: a mismatch is caught before <code>completed</code>, and the error names the responsible worker/version. <b>Note:</b> the Docker worker image has no <code>git</code> binary, so <code>code_version='unknown'</code> today — a correct, non-fatal degradation.</p>
+      </div>
+    </section>
+
+    <!-- 11 GATES -->
+    <section id="gates">
+      <h2 class="collapse-head"><span class="sec-num">11</span> Validation Gates</h2>
+      <div class="sec-body">
+        <p class="lead">Four gates protect correctness. Two run at ingestion completion (must pass before <code>completed</code>); one at reconstruction; one is the operational stamp.</p>
+        <div class="diagram">
+          <svg viewBox="0 0 900 250" role="img" aria-label="Validation gates">
+            <g font-size="11.5" fill="#fff" text-anchor="middle">
+              <rect x="30" y="40" width="190" height="70" rx="8" fill="var(--validation)"/><text x="125" y="66">Lineage completeness</text><text x="125" y="86" font-size="10">crop candidate but</text><text x="125" y="100" font-size="10">no source_image_id → error</text>
+              <rect x="240" y="40" width="190" height="70" rx="8" fill="var(--validation)"/><text x="335" y="66">Table-count sanity</text><text x="335" y="86" font-size="10">parsed ≠ stored</text><text x="335" y="100" font-size="10">→ completed_with_errors</text>
+              <rect x="450" y="40" width="190" height="70" rx="8" fill="var(--vlm)"/><text x="545" y="66">Faithfulness gate</text><text x="545" y="86" font-size="10">3-tier numeric</text><text x="545" y="100" font-size="10">0% / 8% / 20%</text>
+              <rect x="660" y="40" width="200" height="70" rx="8" fill="var(--lineage)"/><text x="760" y="66">Worker stamping</text><text x="760" y="86" font-size="10">worker_id + code_version</text><text x="760" y="100" font-size="10">in every job + error msg</text>
+            </g>
+            <text x="335" y="150" text-anchor="middle" fill="var(--text-dim)" font-size="11">Gates 1 &amp; 2 run sequentially before update_status(…, 'completed')</text>
+            <rect x="240" y="165" width="380" height="34" rx="7" fill="none" stroke="var(--storage)" stroke-width="1.5"/>
+            <text x="430" y="187" text-anchor="middle" fill="var(--storage)" font-size="11">both pass → status='completed'</text>
+          </svg>
+          <div class="cap">Figure 10 — The four correctness gates and where they fire.</div>
+        </div>
+        <table>
+          <thead><tr><th>Gate</th><th>Function</th><th>Trigger → outcome</th></tr></thead>
+          <tbody>
+            <tr><td>Lineage completeness</td><td><code>_find_table_lineage_gap()</code></td><td>crop candidate missing <code>source_image_id</code> → <code>completed_with_errors</code></td></tr>
+            <tr><td>Table-count sanity</td><td><code>_find_table_count_mismatch()</code></td><td><code>len(parsed_doc.tables) ≠</code> stored rows → <code>completed_with_errors</code> (names worker)</td></tr>
+            <tr><td>Faithfulness</td><td><code>faithfulness_ok()</code></td><td>VLM unseen numbers over tier tolerance → keep Docling</td></tr>
+            <tr><td>Worker stamping</td><td><code>_stamp_worker_identity()</code></td><td>always — records <code>worker_id/code_version</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 12 SEQUENCE -->
+    <section id="sequence">
+      <h2 class="collapse-head"><span class="sec-num">12</span> Sequence Diagrams</h2>
+      <div class="sec-body">
+        <h3>Ingestion: upload → API → worker → parser → DB</h3>
+        <div class="diagram">
+          <svg viewBox="0 0 880 380" role="img" aria-label="Ingestion sequence">
+            <g font-size="11.5" fill="var(--text-dim)" text-anchor="middle">
+              <text x="80" y="24">User</text><text x="230" y="24">API</text><text x="400" y="24">Celery worker</text><text x="580" y="24">Parser/Docling</text><text x="800" y="24">Postgres</text>
+            </g>
+            <g stroke="var(--border)" stroke-width="1.5" stroke-dasharray="3 4">
+              <line x1="80" y1="34" x2="80" y2="360"/><line x1="230" y1="34" x2="230" y2="360"/><line x1="400" y1="34" x2="400" y2="360"/><line x1="580" y1="34" x2="580" y2="360"/><line x1="800" y1="34" x2="800" y2="360"/>
+            </g>
+            <defs><marker id="ahq" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--accent)"/></marker></defs>
+            <g stroke="var(--accent)" stroke-width="1.6" marker-end="url(#ahq)" font-size="10">
+              <line x1="80" y1="60" x2="228" y2="60"/><text x="150" y="54" fill="var(--text)" text-anchor="middle">POST /ingest/upload</text>
+              <line x1="230" y1="90" x2="398" y2="90"/><text x="315" y="84" fill="var(--text)" text-anchor="middle">enqueue task</text>
+              <line x1="230" y1="118" x2="82" y2="118"/><text x="150" y="112" fill="var(--text)" text-anchor="middle">job_id (queued)</text>
+              <line x1="400" y1="148" x2="798" y2="148"/><text x="600" y="142" fill="var(--text)" text-anchor="middle">stamp worker_id/code_version</text>
+              <line x1="400" y1="178" x2="578" y2="178"/><text x="490" y="172" fill="var(--text)" text-anchor="middle">parse (chunked)</text>
+              <line x1="580" y1="208" x2="402" y2="208"/><text x="490" y="202" fill="var(--text)" text-anchor="middle">merged tables + spans</text>
+              <line x1="400" y1="238" x2="798" y2="238"/><text x="600" y="232" fill="var(--text)" text-anchor="middle">insert table_store / chunks</text>
+              <line x1="400" y1="268" x2="798" y2="268"/><text x="600" y="262" fill="var(--text)" text-anchor="middle">run gates → status</text>
+              <line x1="230" y1="310" x2="82" y2="310"/><text x="150" y="304" fill="var(--text)" text-anchor="middle">poll status → completed</text>
+            </g>
+            <rect x="360" y="132" width="90" height="150" fill="var(--accent-soft)" opacity="0.5"/>
+          </svg>
+          <div class="cap">Figure 11 — Async ingestion sequence (worker stamps identity first, gates last).</div>
+        </div>
+
+        <h3>Query: user → API → retriever + engine → synthesis</h3>
+        <div class="diagram">
+          <svg viewBox="0 0 880 300" role="img" aria-label="Query sequence">
+            <g font-size="11.5" fill="var(--text-dim)" text-anchor="middle">
+              <text x="80" y="24">User</text><text x="250" y="24">API /query</text><text x="470" y="24">Retriever + Engine</text><text x="720" y="24">Postgres + Gemma</text>
+            </g>
+            <g stroke="var(--border)" stroke-width="1.5" stroke-dasharray="3 4">
+              <line x1="80" y1="34" x2="80" y2="280"/><line x1="250" y1="34" x2="250" y2="280"/><line x1="470" y1="34" x2="470" y2="280"/><line x1="720" y1="34" x2="720" y2="280"/>
+            </g>
+            <g stroke="var(--retrieval)" stroke-width="1.6" marker-end="url(#ahq)" font-size="10">
+              <line x1="80" y1="58" x2="248" y2="58"/><text x="165" y="52" fill="var(--text)" text-anchor="middle">POST /query</text>
+              <line x1="250" y1="86" x2="468" y2="86"/><text x="360" y="80" fill="var(--text)" text-anchor="middle">embed + ANN + try_structured</text>
+              <line x1="470" y1="114" x2="718" y2="114"/><text x="595" y="108" fill="var(--text)" text-anchor="middle">vector search / SUM json_data</text>
+              <line x1="720" y1="142" x2="472" y2="142"/><text x="595" y="136" fill="var(--text)" text-anchor="middle">chunks + structured_result</text>
+              <line x1="470" y1="170" x2="718" y2="170"/><text x="595" y="164" fill="var(--text)" text-anchor="middle">synthesis (fact prefixed)</text>
+              <line x1="720" y1="198" x2="472" y2="198"/><text x="595" y="192" fill="var(--text)" text-anchor="middle">cited answer</text>
+              <line x1="470" y1="226" x2="252" y2="226"/><text x="360" y="220" fill="var(--text)" text-anchor="middle">answer + citations + structured_result</text>
+              <line x1="250" y1="254" x2="82" y2="254"/><text x="165" y="248" fill="var(--text)" text-anchor="middle">JSON response</text>
+            </g>
+          </svg>
+          <div class="cap">Figure 12 — Query sequence: semantic + structured run together, converge at synthesis.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 13 VALIDATION -->
+    <section id="validation">
+      <h2 class="collapse-head"><span class="sec-num">13</span> Validation Evidence</h2>
+      <div class="sec-body">
+        <p class="lead">All gathered against the live Docker stack via the real HTTP API and real SQL — not internal function calls presented as proof.</p>
+        <table>
+          <thead><tr><th>Feature</th><th>Evidence</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>Multi-page continuation</td><td>70-row/3-page PDF → exactly 1 <code>table_store</code> row; <code>row_page_numbers=[1×28,2×31,3×11]</code>; 2 windows straddle the page boundary</td><td><span class="pill pass">verified</span></td></tr>
+            <tr><td>Per-cell span model</td><td>11×7 PDF, 4 <code>SPAN</code> regions → TableFormer detected all 4; <code>cells</code> exact; 8% tier selected</td><td><span class="pill pass">verified</span></td></tr>
+            <tr><td>Multi-row header fix</td><td>2-row header → <code>"Q1 2024 - Budget"</code>; second header row excluded from data</td><td><span class="pill pass">verified</span></td></tr>
+            <tr><td>Structured query</td><td><code>SUM(Actual USD)=1,062,740.0</code> via API, cross-checked against raw SQL — exact</td><td><span class="pill pass">verified</span></td></tr>
+            <tr><td>Retrieval citations</td><td><code>page_number_end</code> null on single-page (no regression); spans true range on merged</td><td><span class="pill pass">verified</span></td></tr>
+            <tr><td>Worker stamping</td><td>Live <code>ingestion_jobs</code>: <code>worker_id=…-1783020256, code_version=unknown</code> (no git in image — correct)</td><td><span class="pill pass">verified</span></td></tr>
+            <tr><td>Table-count gate</td><td><b>Actually triggered</b> via reversible patch → <code>completed_with_errors</code>, "parser produced 2 but 1 inserted"; patch reverted (MD5 match); clean recovery</td><td><span class="pill pass">verified</span></td></tr>
+            <tr><td>Test suite</td><td>667 passed, 2 skipped (pre-existing env-gated), 0 failed — independently rerun before each commit</td><td><span class="pill pass">667/667</span></td></tr>
+            <tr><td>Regression</td><td>Original single-page finance doc: identical citation shape, correct SUM, unaffected semantics</td><td><span class="pill pass">verified</span></td></tr>
+          </tbody>
+        </table>
+        <div class="callout warn"><span class="tag">Synthesis-quality note (not architectural)</span>During live runs, Gemma's prose twice misused correctly-retrieved data (undercount; self-contradiction vs its own <code>structured_result</code>). Plumbing was confirmed correct via raw citation/chunk inspection — a downstream synthesis-prompt issue, not a defect in anything above.</p>
+      </div>
+    </section>
+
+    <!-- 14 LIMITATIONS -->
+    <section id="limitations">
+      <h2 class="collapse-head"><span class="sec-num">14</span> Known Limitations</h2>
+      <div class="sec-body">
+        <p class="lead">Accepted, documented trade-offs — not oversights.</p>
+        <ul>
+          <li><b>Span model is span-only</b> — geometry + text per region, but nothing downstream reconstructs a visual table yet (exists for the faithfulness gate + future use).</li>
+          <li><b>Continuation false positives</b> — unrelated tables with identical headers on consecutive pages merge; no semantic guard.</li>
+          <li><b>PDF-only continuation</b> — <code>_parse_non_pdf</code> never calls <code>_merge_continued_tables</code>.</li>
+          <li><b>column_header gap</b> — DOCX/PPTX/XLSX/MD backends never set it → <code>header_row_count</code> always 0 for those.</li>
+          <li><b>Structured engine is single-table</b> — no cross-table aggregate.</li>
+          <li><b>Column-match substring false-positive</b> (plurals) — follow-up, not fixed.</li>
+          <li><b>Agentic-streaming + structured gap</b> — non-default config only.</li>
+          <li><b>Synthesis-quality gaps</b> — downstream of Gemma, not the table pipeline.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 15 SUMMARY -->
+    <section id="summary">
+      <h2 class="collapse-head"><span class="sec-num">15</span> Architecture Summary</h2>
+      <div class="sec-body">
+        <div class="dash-grid">
+          <div class="stat info"><div class="num">12</div><div class="lbl">Pipeline stages</div></div>
+          <div class="stat info"><div class="num">5</div><div class="lbl">Core DB tables</div></div>
+          <div class="stat ok"><div class="num">4</div><div class="lbl">Validation gates</div></div>
+          <div class="stat ok"><div class="num">667</div><div class="lbl">Tests passing</div></div>
+          <div class="stat ok"><div class="num">0</div><div class="lbl">Failures</div></div>
+          <div class="stat warn"><div class="num">8</div><div class="lbl">Known limitations</div></div>
+        </div>
+        <table>
+          <thead><tr><th>Dimension</th><th>State</th></tr></thead>
+          <tbody>
+            <tr><td>Components delivered</td><td>Continuation merge · span model · structured engine · retrieval citations · worker stamping · count gate</td></tr>
+            <tr><td>Migrations</td><td>015 (worker stamp) — all else additive JSONB, no migration</td></tr>
+            <tr><td>Backward compatibility</td><td><span class="pill pass">Full</span> — single-page tables byte-identical; new fields default null/absent</td></tr>
+            <tr><td>Validation</td><td><span class="pill pass">Live E2E</span> — API + SQL + gate actually triggered</td></tr>
+            <tr><td>Production readiness</td><td><span class="pill pass">Ready-with-caveats</span> — code sound; caveats are documented ops/scope items</td></tr>
+          </tbody>
+        </table>
+        <div class="callout"><span class="tag info">Source of truth</span>This document renders <a href="table_pipeline_architecture.md">table_pipeline_architecture.md</a>. Current as of commit <code>f36454d</code> (2026-07-03).</p>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script>
+(function(){
+  var root = document.documentElement;
+  // theme
+  var tBtn = document.getElementById('themeToggle');
+  tBtn.onclick = function(){
+    var light = root.getAttribute('data-theme') === 'light';
+    root.setAttribute('data-theme', light ? 'dark' : 'light');
+    tBtn.textContent = light ? '☀ Light' : '☾ Dark';
+  };
+  // anim
+  var aBtn = document.getElementById('animToggle'), animOff=false;
+  aBtn.onclick = function(){ animOff=!animOff; document.documentElement.classList.toggle('no-anim',animOff); aBtn.textContent = animOff ? '▶ Anim' : '⏸ Anim'; };
+  // collapse per section
+  document.querySelectorAll('.collapse-head').forEach(function(h){
+    h.onclick = function(){ h.closest('section').classList.toggle('collapsed'); };
+  });
+  // expand/collapse all
+  var eBtn = document.getElementById('expandAll'), collapsed=false;
+  eBtn.onclick = function(){
+    collapsed=!collapsed;
+    document.querySelectorAll('section').forEach(function(s){ s.classList.toggle('collapsed',collapsed); });
+    eBtn.textContent = collapsed ? 'Expand all' : 'Collapse all';
+  };
+  // code snippet toggle
+  document.querySelectorAll('.code-head').forEach(function(h){
+    h.onclick = function(){ var b=h.closest('.code-block'); b.classList.toggle('collapsed'); h.querySelector('.toggle').textContent = b.classList.contains('collapsed')?'show ▾':'hide ▴'; };
+  });
+  // scrollspy
+  var links = [].slice.call(document.querySelectorAll('.nav a'));
+  var secs = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+  function spy(){
+    var y = window.scrollY + 90, cur = 0;
+    secs.forEach(function(s,i){ if(s && s.offsetTop <= y) cur=i; });
+    links.forEach(function(a,i){ a.classList.toggle('active', i===cur); });
+  }
+  window.addEventListener('scroll', spy); spy();
+  // search
+  var sInput = document.getElementById('search');
+  sInput.oninput = function(){
+    var q = sInput.value.trim().toLowerCase();
+    document.querySelectorAll('section').forEach(function(s){
+      if(!q){ s.classList.remove('search-hidden'); return; }
+      var hit = s.textContent.toLowerCase().indexOf(q) !== -1;
+      s.classList.toggle('search-hidden', !hit);
+    });
+    // also filter nav
+    links.forEach(function(a){
+      var s=document.querySelector(a.getAttribute('href'));
+      a.parentElement.style.display = (!q || (s && !s.classList.contains('search-hidden'))) ? '' : 'none';
+    });
+  };
+})();
+</script>
+</body>
+</html>

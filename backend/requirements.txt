@@ -1,0 +1,57 @@
+# Web framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.18
+
+# Config
+pydantic-settings==2.6.1
+pydantic==2.10.3
+python-dotenv==1.0.1
+
+# Database
+psycopg2-binary==2.9.10
+pgvector==0.3.6
+asyncpg==0.30.0
+
+# Supabase Storage SDK
+supabase==2.10.0
+
+# Celery + Redis
+celery==5.4.0
+redis==5.2.1
+
+# Document parsing
+docling==2.14.0
+
+# Embeddings (sentence-transformers pulls torch)
+sentence-transformers==3.3.1
+
+# HTTP client (for CDAC Gemma endpoint)
+httpx==0.27.2
+
+# Utilities
+numpy==1.26.4
+python-jose[cryptography]==3.3.0
+aiofiles==24.1.0
+tenacity==9.0.0
+
+# Neo4j multi-PDF graph (Phase 4) — degradation-safe; only used when NEO4J_ENABLED
+neo4j==5.28.4
+
+# GraphRAG (Feature 1.3) — community detection; imported lazily (only when GRAPHRAG_ENABLED)
+networkx==3.2.1
+python-louvain==0.16
+
+# Observability (OpenTelemetry tracing) — see app/core/tracing.py. Spans are
+# always created when OTEL_ENABLED=True; OTLP export only activates when
+# OTEL_EXPORTER_OTLP_ENDPOINT is set.
+opentelemetry-api==1.29.0
+opentelemetry-sdk==1.29.0
+opentelemetry-exporter-otlp-proto-http==1.29.0
+opentelemetry-instrumentation-fastapi==0.50b0
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+pymupdf==1.27.2.3

@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  /* Dark-mode form controls — applies only to inputs without an explicit bg/text class */
+  .dark input,
+  .dark textarea,
+  .dark select {
+    @apply bg-gray-800 text-gray-100 border-gray-700;
+  }
+  .dark input::placeholder,
+  .dark textarea::placeholder {
+    @apply text-gray-500;
+  }
+  /* Native dropdown option list */
+  .dark select option {
+    @apply bg-gray-800 text-gray-100;
+  }
+
+  /* Hide scrollbars app-wide while keeping scroll functional */
+  * {
+    scrollbar-width: none;        /* Firefox */
+    -ms-overflow-style: none;     /* IE/old Edge */
+  }
+  *::-webkit-scrollbar {
+    display: none;                /* Chrome/Safari/Edge */
+    width: 0;
+    height: 0;
+  }
+
+  /* ── Light-mode elevation ──────────────────────────────────────────────
+     Give white, rounded card surfaces a soft shadow + crisper border so they
+     lift off the gray page background. Light mode only (html without .dark);
+     dark mode keeps its flat, border-defined look. */
+  html:not(.dark) .bg-white.rounded-lg,
+  html:not(.dark) .bg-white.rounded-xl,
+  html:not(.dark) .bg-white.rounded-2xl {
+    box-shadow:
+      0 1px 2px 0 rgba(16, 24, 40, 0.04),
+      0 2px 6px -1px rgba(16, 24, 40, 0.08);
+    border-color: rgba(16, 24, 40, 0.08);
+  }
+
+  /* Structural chrome — sidebar + header get a subtle edge shadow in light mode */
+  html:not(.dark) aside,
+  html:not(.dark) header {
+    box-shadow: 0 1px 3px 0 rgba(16, 24, 40, 0.06);
+  }
+}

@@ -1,0 +1,259 @@
+"""
+Shared Gemma 4 (CDAC OpenAI-compatible) chat client.
+
+Provides two entry points:
+  chat()        — synchronous, for Celery ingestion workers
+  chat_async()  — async, for the FastAPI query path
+
+Both use a process-wide pooled client (TLS handshake paid once) and the same
+retry / backoff logic.  The async variant additionally acquires a semaphore slot
+so at most GEMMA4_MAX_CONCURRENT requests run in parallel — excess requests queue
+rather than opening parallel connections that overwhelm the CDAC endpoint.
+"""
+import asyncio
+import json as _json
+import logging
+import threading
+import time
+
+import httpx
+
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+
+
+# ── Shared helpers ────────────────────────────────────────────────────────────
+
+def _backoff(attempt: int) -> float:
+    return min(0.5 * (2 ** (attempt - 1)), 4.0)
+
+
+def _build_headers() -> dict:
+    h = {"Content-Type": "application/json"}
+    if settings.GEMMA4_API_KEY:
+        h["Authorization"] = f"Bearer {settings.GEMMA4_API_KEY}"
+    return h
+
+
+def _build_payload(messages: list, max_tokens: int, temperature: float) -> dict:
+    return {
+        "model": settings.GEMMA4_MODEL_NAME,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+
+
+def _timeout() -> httpx.Timeout:
+    return httpx.Timeout(
+        connect=settings.GEMMA4_CONNECT_TIMEOUT_SECONDS,
+        read=settings.GEMMA4_TIMEOUT_SECONDS,
+        write=settings.GEMMA4_CONNECT_TIMEOUT_SECONDS,
+        pool=settings.GEMMA4_CONNECT_TIMEOUT_SECONDS,
+    )
+
+
+def _limits() -> httpx.Limits:
+    return httpx.Limits(
+        max_keepalive_connections=10,
+        max_connections=20,
+        keepalive_expiry=60,
+    )
+
+
+# ── Sync client (Celery ingestion workers) ───────────────────────────────────
+
+_client: httpx.Client | None = None
+_client_lock = threading.Lock()
+
+_sync_semaphore: threading.Semaphore | None = None
+_sync_semaphore_lock = threading.Lock()
+
+
+def _get_client() -> httpx.Client:
+    """Process-wide pooled sync client, thread-safe double-checked init."""
+    global _client
+    if _client is None or _client.is_closed:
+        with _client_lock:
+            if _client is None or _client.is_closed:
+                _client = httpx.Client(timeout=_timeout(), limits=_limits())
+    return _client
+
+
+def _get_sync_semaphore() -> threading.Semaphore:
+    """Process-wide semaphore shared by every sync/thread caller (e.g. clause
+    enrichment's ThreadPoolExecutor), mirroring the async semaphore so at most
+    GEMMA4_MAX_CONCURRENT Gemma requests run in parallel regardless of which
+    path (async or sync/thread) issues them. Thread-safe double-checked init."""
+    global _sync_semaphore
+    if _sync_semaphore is None:
+        with _sync_semaphore_lock:
+            if _sync_semaphore is None:
+                limit = settings.GEMMA4_MAX_CONCURRENT
+                if limit is None or limit <= 0:
+                    limit = 1
+                _sync_semaphore = threading.Semaphore(limit)
+    return _sync_semaphore
+
+
+def chat(
+    messages: list[dict],
+    max_tokens: int,
+    temperature: float = 0.1,
+    retries: int | None = None,
+    timeout: float | None = None,
+) -> str:
+    """Sync Gemma call — retries transient connect errors and 429/5xx.
+    Does NOT retry ReadTimeout (model is already generating). Thread-safe.
+    `timeout` (seconds) overrides the pooled client's read timeout for this
+    call only — larger multi-item prompts (e.g. batched clause enrichment)
+    need a longer read budget than a single-answer request."""
+    if not settings.GEMMA4_BASE_URL:
+        raise RuntimeError("GEMMA4_BASE_URL not configured")
+
+    attempts = (settings.GEMMA4_MAX_RETRIES if retries is None else retries) + 1
+    url = f"{settings.GEMMA4_BASE_URL.rstrip('/')}/chat/completions"
+    headers = _build_headers()
+    payload = _build_payload(messages, max_tokens, temperature)
+    client = _get_client()
+    last_exc: Exception | None = None
+
+    semaphore = _get_sync_semaphore()
+    for attempt in range(1, attempts + 1):
+        semaphore.acquire()
+        try:
+            if timeout is not None:
+                resp = client.post(url, json=payload, headers=headers, timeout=timeout)
+            else:
+                resp = client.post(url, json=payload, headers=headers)
+            if resp.status_code in _RETRYABLE_STATUS and attempt < attempts:
+                logger.warning("Gemma %s (attempt %d/%d) — retrying", resp.status_code, attempt, attempts)
+                time.sleep(_backoff(attempt))
+                continue
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"].strip()
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout) as exc:
+            last_exc = exc
+            logger.warning("Gemma connect error (attempt %d/%d): %s", attempt, attempts, exc)
+            if attempt < attempts:
+                time.sleep(_backoff(attempt))
+                continue
+            raise
+        except httpx.ReadTimeout:
+            logger.warning("Gemma read timeout after %ds", settings.GEMMA4_TIMEOUT_SECONDS)
+            raise
+        finally:
+            semaphore.release()
+
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("Gemma call failed after retries")
+
+
+# ── Async client + semaphore (FastAPI query path) ─────────────────────────────
+
+_async_client: httpx.AsyncClient | None = None
+_semaphore: asyncio.Semaphore | None = None
+
+
+def _get_async_client() -> httpx.AsyncClient:
+    """Lazy singleton — safe because asyncio is single-threaded."""
+    global _async_client
+    if _async_client is None or _async_client.is_closed:
+        _async_client = httpx.AsyncClient(timeout=_timeout(), limits=_limits())
+    return _async_client
+
+
+def _get_semaphore() -> asyncio.Semaphore:
+    """Lazy singleton — safe because asyncio is single-threaded."""
+    global _semaphore
+    if _semaphore is None:
+        _semaphore = asyncio.Semaphore(settings.GEMMA4_MAX_CONCURRENT)
+    return _semaphore
+
+
+async def chat_async(
+    messages: list[dict],
+    max_tokens: int,
+    temperature: float = 0.1,
+    retries: int | None = None,
+) -> str:
+    """Async Gemma call — acquires a semaphore slot so at most
+    GEMMA4_MAX_CONCURRENT requests run in parallel. Uses asyncio.sleep for
+    backoff so the event loop stays responsive during retries."""
+    if not settings.GEMMA4_BASE_URL:
+        raise RuntimeError("GEMMA4_BASE_URL not configured")
+
+    attempts = (settings.GEMMA4_MAX_RETRIES if retries is None else retries) + 1
+    url = f"{settings.GEMMA4_BASE_URL.rstrip('/')}/chat/completions"
+    headers = _build_headers()
+    payload = _build_payload(messages, max_tokens, temperature)
+    last_exc: Exception | None = None
+
+    async with _get_semaphore():
+        client = _get_async_client()
+        for attempt in range(1, attempts + 1):
+            try:
+                resp = await client.post(url, json=payload, headers=headers)
+                if resp.status_code in _RETRYABLE_STATUS and attempt < attempts:
+                    logger.warning(
+                        "Gemma %s (attempt %d/%d) — retrying", resp.status_code, attempt, attempts
+                    )
+                    await asyncio.sleep(_backoff(attempt))
+                    continue
+                resp.raise_for_status()
+                return resp.json()["choices"][0]["message"]["content"].strip()
+            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout) as exc:
+                last_exc = exc
+                logger.warning("Gemma connect error (attempt %d/%d): %s", attempt, attempts, exc)
+                if attempt < attempts:
+                    await asyncio.sleep(_backoff(attempt))
+                    continue
+                raise
+            except httpx.ReadTimeout:
+                logger.warning("Gemma read timeout after %ds", settings.GEMMA4_TIMEOUT_SECONDS)
+                raise
+
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("Gemma async call failed after retries")
+
+
+async def chat_async_stream(
+    messages: list[dict],
+    max_tokens: int,
+    temperature: float = 0.1,
+):
+    """Async streaming Gemma call — yields text delta strings via SSE.
+    Uses the same semaphore as chat_async so GEMMA4_MAX_CONCURRENT is respected.
+    The semaphore slot is held for the full stream duration."""
+    if not settings.GEMMA4_BASE_URL:
+        raise RuntimeError("GEMMA4_BASE_URL not configured")
+
+    url = f"{settings.GEMMA4_BASE_URL.rstrip('/')}/chat/completions"
+    headers = _build_headers()
+    payload = _build_payload(messages, max_tokens, temperature)
+    payload["stream"] = True
+
+    async with _get_semaphore():
+        client = _get_async_client()
+        async with client.stream("POST", url, json=payload, headers=headers) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+                data = line[6:].strip()
+                if data == "[DONE]":
+                    return
+                if not data:
+                    continue
+                try:
+                    chunk = _json.loads(data)
+                    delta = chunk["choices"][0]["delta"].get("content", "")
+                    if delta:
+                        yield delta
+                except (ValueError, KeyError, IndexError):
+                    continue

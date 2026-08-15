@@ -1,0 +1,61 @@
+# Environment
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ML model cache (large — download on first run)
+backend/.cache/
+backend/models/
+backend/docling_models/
+
+# Uploaded files (use Supabase Storage, not git)
+backend/uploads/
+backend/temp/
+
+# Local run logs (from run.bat / dev startup)
+*.log
+api.log
+worker.log
+frontend.log
+
+# Graphify (generated — teammates run: graphify extract backend/app --no-cluster)
+graphify-out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+
+# unwanted
+*.sh
+
+screenshots

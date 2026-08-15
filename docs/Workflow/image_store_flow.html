@@ -1,0 +1,590 @@
+<title>Multi-Store RAG Chatbot — Image Store Pipeline</title>
+<style>
+  :root {
+    --paper: #f6f7f9;
+    --surface: #ffffff;
+    --surface-2: #eef1f6;
+    --ink: #161a22;
+    --ink-soft: #4a5364;
+    --ink-faint: #6b7486;
+    --border: #e3e7ee;
+    --border-strong: #cdd4e0;
+    --ingest: #3a5ccc;
+    --ingest-soft: #eaf0ff;
+    --retrieve: #0d8b86;
+    --retrieve-soft: #e2f4f2;
+    --amber: #b9770f;
+    --amber-soft: #fbf1dc;
+    --green: #2f8a52;
+    --green-soft: #e6f3ea;
+    --red: #c0392b;
+    --red-soft: #fbe9e7;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --shadow: 0 1px 2px rgba(20,26,38,.05), 0 4px 14px rgba(20,26,38,.05);
+    --radius: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #10131a;
+      --surface: #171b24;
+      --surface-2: #1e2430;
+      --ink: #eef1f6;
+      --ink-soft: #b3bccb;
+      --ink-faint: #8b94a5;
+      --border: #262d3a;
+      --border-strong: #333c4c;
+      --ingest: #7d97f0;
+      --ingest-soft: #1c2545;
+      --retrieve: #3fc0b8;
+      --retrieve-soft: #123330;
+      --amber: #e0a545;
+      --amber-soft: #33290f;
+      --green: #5fc182;
+      --green-soft: #14301f;
+      --red: #e8756a;
+      --red-soft: #331917;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --paper: #f6f7f9; --surface: #ffffff; --surface-2: #eef1f6;
+    --ink: #161a22; --ink-soft: #4a5364; --ink-faint: #6b7486;
+    --border: #e3e7ee; --border-strong: #cdd4e0;
+    --ingest: #3a5ccc; --ingest-soft: #eaf0ff;
+    --retrieve: #0d8b86; --retrieve-soft: #e2f4f2;
+    --amber: #b9770f; --amber-soft: #fbf1dc;
+    --green: #2f8a52; --green-soft: #e6f3ea;
+    --red: #c0392b; --red-soft: #fbe9e7;
+    --shadow: 0 1px 2px rgba(20,26,38,.05), 0 4px 14px rgba(20,26,38,.05);
+  }
+  :root[data-theme="dark"] {
+    --paper: #10131a; --surface: #171b24; --surface-2: #1e2430;
+    --ink: #eef1f6; --ink-soft: #b3bccb; --ink-faint: #8b94a5;
+    --border: #262d3a; --border-strong: #333c4c;
+    --ingest: #7d97f0; --ingest-soft: #1c2545;
+    --retrieve: #3fc0b8; --retrieve-soft: #123330;
+    --amber: #e0a545; --amber-soft: #33290f;
+    --green: #5fc182; --green-soft: #14301f;
+    --red: #e8756a; --red-soft: #331917;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 56px 28px 96px; }
+
+  /* ---- Masthead ---- */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-size: clamp(30px, 5vw, 44px);
+    line-height: 1.08;
+    letter-spacing: -.02em;
+    text-wrap: balance;
+    margin: 0 0 14px;
+    font-weight: 700;
+  }
+  .lede {
+    font-size: 18px;
+    color: var(--ink-soft);
+    max-width: 62ch;
+    margin: 0;
+  }
+  .masthead { border-bottom: 1px solid var(--border); padding-bottom: 40px; margin-bottom: 44px; }
+
+  /* ---- Concept banner ---- */
+  .concept {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--ingest);
+    border-radius: var(--radius);
+    padding: 24px 26px;
+    box-shadow: var(--shadow);
+    margin-bottom: 44px;
+  }
+  .concept h2 { margin: 0 0 8px; font-size: 17px; letter-spacing: -.01em; }
+  .concept p { margin: 0 0 10px; color: var(--ink-soft); font-size: 15px; max-width: 78ch; }
+  .concept p:last-child { margin-bottom: 0; }
+  .concept .kw { font-family: var(--mono); font-size: 13px; background: var(--surface-2); padding: 1px 6px; border-radius: 5px; color: var(--ink); }
+
+  /* ---- Section headers ---- */
+  .flow-head { display: flex; align-items: baseline; gap: 14px; margin: 0 0 6px; flex-wrap: wrap; }
+  .flow-tag {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    padding: 5px 11px;
+    border-radius: 20px;
+  }
+  .flow-tag.ingest { background: var(--ingest-soft); color: var(--ingest); }
+  .flow-tag.retrieve { background: var(--retrieve-soft); color: var(--retrieve); }
+  h2.flow-title { font-size: 26px; letter-spacing: -.02em; margin: 0; font-weight: 700; }
+  .flow-sub { color: var(--ink-soft); font-size: 15px; margin: 6px 0 34px; max-width: 70ch; }
+
+  section.flow { margin-bottom: 72px; }
+
+  /* ---- Spine ---- */
+  .spine { position: relative; padding-left: 8px; }
+  .stage {
+    position: relative;
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 20px;
+    padding-bottom: 26px;
+  }
+  .stage:last-child { padding-bottom: 0; }
+  /* connector line */
+  .stage::before {
+    content: "";
+    position: absolute;
+    left: 23px;
+    top: 46px;
+    bottom: -4px;
+    width: 2px;
+    background: var(--border-strong);
+  }
+  .stage:last-child::before { display: none; }
+
+  .node {
+    width: 46px; height: 46px;
+    border-radius: 12px;
+    display: grid; place-items: center;
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 16px;
+    color: #fff;
+    z-index: 1;
+    box-shadow: var(--shadow);
+  }
+  .ingest .node { background: var(--ingest); }
+  .retrieve .node { background: var(--retrieve); }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    box-shadow: var(--shadow);
+  }
+  .card h3 { margin: 0 0 6px; font-size: 16px; letter-spacing: -.01em; }
+  .card p { margin: 0; color: var(--ink-soft); font-size: 14.5px; }
+  .card p + p { margin-top: 8px; }
+  code, .fld {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--surface-2);
+    padding: 1px 6px;
+    border-radius: 5px;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  /* sub-steps inside a stage */
+  .substeps { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+  .substeps li {
+    display: grid; grid-template-columns: 20px 1fr; gap: 10px;
+    font-size: 14px; color: var(--ink-soft);
+    align-items: start;
+  }
+  .substeps .mk {
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    color: var(--ink-faint);
+    background: var(--surface-2);
+    border-radius: 5px;
+    text-align: center;
+    line-height: 20px;
+  }
+
+  /* decision / branch chips */
+  .branches { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .chip {
+    font-size: 12.5px;
+    padding: 6px 11px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    display: inline-flex; align-items: center; gap: 7px;
+    font-weight: 500;
+  }
+  .chip .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .chip.skip { background: var(--amber-soft); color: var(--amber); border-color: color-mix(in srgb, var(--amber) 24%, transparent); }
+  .chip.skip .dot { background: var(--amber); }
+  .chip.route { background: var(--green-soft); color: var(--green); border-color: color-mix(in srgb, var(--green) 24%, transparent); }
+  .chip.route .dot { background: var(--green); }
+  .chip.fail { background: var(--red-soft); color: var(--red); border-color: color-mix(in srgb, var(--red) 24%, transparent); }
+  .chip.fail .dot { background: var(--red); }
+
+  .branch-label {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ink-faint);
+    width: 100%; margin-bottom: -3px;
+  }
+
+  /* outcome callout inside a card */
+  .outcome {
+    margin-top: 14px; padding: 11px 14px;
+    border-radius: 9px; font-size: 13.5px;
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .outcome.keep { background: var(--ingest-soft); color: var(--ink); }
+  .outcome.done { background: var(--green-soft); color: var(--ink); }
+  .outcome b { font-weight: 700; }
+
+  /* ---- edge case grid ---- */
+  .edge-block { margin: 40px 0 0; }
+  .edge-block h3 {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--ink-faint);
+    margin: 0 0 16px; font-weight: 600;
+  }
+  .edge-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 12px; }
+  .edge {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 13px 15px;
+    border-top: 3px solid var(--border-strong);
+  }
+  .edge.skip { border-top-color: var(--amber); }
+  .edge.fail { border-top-color: var(--red); }
+  .edge.route { border-top-color: var(--green); }
+  .edge .t { font-weight: 600; font-size: 13.5px; margin: 0 0 4px; }
+  .edge .d { font-size: 13px; color: var(--ink-soft); margin: 0; }
+
+  /* ---- schema table ---- */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 640px; background: var(--surface); }
+  th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  thead th { background: var(--surface-2); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+  tbody tr:last-child td { border-bottom: none; }
+  td .fld { white-space: nowrap; }
+  td.desc { color: var(--ink-soft); }
+
+  /* ---- legend / takeaways ---- */
+  .takeaways { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 20px; }
+  .take {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px 22px; box-shadow: var(--shadow);
+  }
+  .take .n { font-family: var(--mono); font-size: 13px; color: var(--ingest); font-weight: 700; }
+  .take.two .n { color: var(--retrieve); }
+  .take h4 { margin: 8px 0 6px; font-size: 15px; letter-spacing: -.01em; }
+  .take p { margin: 0; font-size: 14px; color: var(--ink-soft); }
+
+  .section-label {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--ink-faint);
+    margin: 0 0 20px; padding-top: 8px;
+    border-top: 1px solid var(--border);
+    display: inline-block;
+  }
+  .divider { height: 1px; background: var(--border); margin: 64px 0; border: 0; }
+
+  footer { color: var(--ink-faint); font-size: 12.5px; margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border); font-family: var(--mono); letter-spacing: .04em; }
+
+  @media (max-width: 560px) {
+    .stage { grid-template-columns: 38px 1fr; gap: 14px; }
+    .node { width: 36px; height: 36px; font-size: 14px; }
+    .stage::before { left: 18px; top: 40px; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Multi-Store RAG Chatbot · Multi-Store Pipeline</p>
+    <h1>The Image Store, end to end</h1>
+    <p class="lede">How a PDF's images are captured, understood and filed on upload — and how that knowledge reaches an answer when a user asks a question. Two flows, every branch and edge case included.</p>
+  </header>
+
+  <div class="concept">
+    <h2>One idea to hold onto</h2>
+    <p>The <span class="kw">image_store</span> is a <b>permanent archive</b>, not a search index. It keeps every image pulled from a document plus everything the system learned about it (OCR text, a vision-model reading, and a structured extraction). It has <b>no embedding column</b> — so it is never searched directly.</p>
+    <p>The moment an image is understood, its useful content is <b>copied into the right destination store</b> (tables, text, clauses or research) where it becomes searchable. Each of those copies carries a <span class="kw">source_image_id</span> pointer back to the original image. So <b>routing happens once, at upload; search happens later, against the destination store.</b></p>
+  </div>
+
+  <!-- ============ FLOW 1 : INGESTION ============ -->
+  <section class="flow">
+    <div class="flow-head">
+      <span class="flow-tag ingest">Flow 1 · Upload</span>
+      <h2 class="flow-title">A PDF comes in</h2>
+    </div>
+    <p class="flow-sub">From the moment a file is uploaded to the moment every image is filed. Runs as a background job on the Celery worker; the UI shows the image count climbing live as rows are written.</p>
+
+    <div class="spine ingest">
+
+      <div class="stage ingest">
+        <div class="node">1</div>
+        <div class="card">
+          <h3>Upload &amp; fetch</h3>
+          <p>The PDF lands in Supabase Storage. The worker downloads it to a temporary local file (keeping the real extension so the parser routes correctly), and deletes it when finished.</p>
+        </div>
+      </div>
+
+      <div class="stage ingest">
+        <div class="node">2</div>
+        <div class="card">
+          <h3>Parse with Docling</h3>
+          <p>The document is parsed page by page (memory-bounded). Every embedded picture is pulled out with its <span class="fld">page number</span>, <span class="fld">bbox</span> (position on the page), <span class="fld">width / height</span> and the raw <span class="fld">PNG bytes</span>.</p>
+        </div>
+      </div>
+
+      <div class="stage ingest">
+        <div class="node">3</div>
+        <div class="card">
+          <h3>Pre-filter — cheap checks first</h3>
+          <p>Each image runs a staged filter so expensive steps are only spent where they pay off. Order matters: throw away junk <em>before</em> paying for OCR, and OCR <em>before</em> paying for the vision model.</p>
+          <ul class="substeps">
+            <li><span class="mk">a</span><span><b>Technical filter</b> (no OCR yet): drops tiny images (under 24&nbsp;px or 1600&nbsp;px²), blank/uniform ones, thin separator lines, and near-duplicates (perceptual hash).</span></li>
+            <li><span class="mk">b</span><span>Surviving images are uploaded to storage at <span class="fld">images/{doc}/{index}.png</span>.</span></li>
+            <li><span class="mk">c</span><span><b>OCR</b> runs — only now, and only on images that passed step&nbsp;a.</span></li>
+            <li><span class="mk">d</span><span><b>Rule engine</b>: small image + almost no text → logo/icon; low-information + faint → watermark. Both dropped.</span></li>
+            <li><span class="mk">e</span><span><b>Classify</b> the survivor: table, chart, diagram, screenshot, photo, text, or unknown.</span></li>
+            <li><span class="mk">f</span><span><b>Decide</b> the processing path (below).</span></li>
+          </ul>
+          <div class="branches">
+            <span class="branch-label">Decision — three exits</span>
+            <span class="chip route"><span class="dot"></span>VLM_PROCESSED — table / chart / diagram / photo / unknown → send to vision model</span>
+            <span class="chip skip"><span class="dot"></span>OCR_ONLY — plain text label → keep OCR, skip vision model</span>
+            <span class="chip skip"><span class="dot"></span>SKIPPED — logo / icon / blank / duplicate → archived, not analysed</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stage ingest">
+        <div class="node">4</div>
+        <div class="card">
+          <h3>Vision model reads the image</h3>
+          <p>Images marked for analysis go to the Gemma vision model, run in <b>bounded parallel</b> (capped worker threads, per-request timeout, OCR text trimmed to a max length so the prompt never overflows).</p>
+          <p>It returns a <span class="fld">structured_content</span> extraction (JSON), its own <span class="fld">vlm_ocr_text</span> transcription, a <span class="fld">detected_store</span> recommendation, and a <span class="fld">confidence</span> score.</p>
+          <div class="branches">
+            <span class="branch-label">If the model fails, times out, or returns bad JSON</span>
+            <span class="chip fail"><span class="dot"></span>Fall back: route by raw OCR text instead — searchable text → text store, empty → stays an archived figure</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stage ingest">
+        <div class="node">5</div>
+        <div class="card">
+          <h3>Write the image_store row</h3>
+          <p>One row is written per image — including the skipped ones, so nothing is lost and every decision is auditable. This row holds the picture's metadata and all three text readings, but <b>no embedding</b>.</p>
+          <div class="outcome keep">
+            <span>📦</span>
+            <span><b>stored_in&nbsp;=&nbsp;NULL</b> at this point. It only gets filled in once the content is actually copied into a destination store (next stage). A row that stays NULL is a pure figure living only in the archive.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stage ingest">
+        <div class="node">6</div>
+        <div class="card">
+          <h3>Register table crops (lineage)</h3>
+          <p>If the document had tables, each table's cropped image is filed in <span class="fld">image_store</span> first (tagged <span class="fld">asset_role = table_crop</span>) so its ID exists <em>before</em> the table row is written. That lets every table point back to the exact image it came from.</p>
+        </div>
+      </div>
+
+      <div class="stage ingest">
+        <div class="node">7</div>
+        <div class="card">
+          <h3>Route content into destination stores</h3>
+          <p>For every image whose <span class="fld">detected_store</span> is <em>not</em> image_store, the system derives clean text from the extraction, <b>embeds it in one batch</b> (BGE, 1024-dim), and writes a row into the matching store:</p>
+          <div class="branches">
+            <span class="chip route"><span class="dot"></span>table_store — for tabular images</span>
+            <span class="chip route"><span class="dot"></span>vector_store — general text</span>
+            <span class="chip route"><span class="dot"></span>clause_store — legal content</span>
+            <span class="chip route"><span class="dot"></span>document_store — research content</span>
+          </div>
+          <div class="outcome done">
+            <span>🔗</span>
+            <span>Each destination row is stamped <b>from_image_store = TRUE</b> and <b>source_image_id = </b>the archive row's ID. On success, the archive row's <b>stored_in</b> flips from NULL to that store. If the write fails, it stays NULL and the loop moves on — the image is never lost.</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="edge-block">
+      <h3>Edge cases handled — Flow 1</h3>
+      <div class="edge-grid">
+        <div class="edge skip"><p class="t">Tiny / blank / separator</p><p class="d">Rejected before OCR. Archived with a skip reason, never analysed.</p></div>
+        <div class="edge skip"><p class="t">Duplicate image</p><p class="d">Perceptual-hash match within tolerance → marked duplicate, skipped.</p></div>
+        <div class="edge skip"><p class="t">Logo / icon / watermark</p><p class="d">Caught by the rule engine (small + little text, or low-info). Skipped.</p></div>
+        <div class="edge fail"><p class="t">PNG upload fails</p><p class="d">That single image is dropped; the rest of the document continues.</p></div>
+        <div class="edge fail"><p class="t">OCR fails</p><p class="d">Fails open to empty text; the image still goes to the vision model.</p></div>
+        <div class="edge fail"><p class="t">Vision model times out / bad JSON</p><p class="d">Falls back to routing by raw OCR text. No crash, no data loss.</p></div>
+        <div class="edge"><p class="t">Plain text label (OCR-only)</p><p class="d">Skips the vision model; routed by its text — to the text store if searchable, else archived.</p></div>
+        <div class="edge route"><p class="t">Image is really a table</p><p class="d">Extraction routed to table_store; archive row's stored_in set to table_store.</p></div>
+        <div class="edge"><p class="t">Pure figure, no text</p><p class="d">Stays in the archive only. stored_in remains NULL — retrievable by lineage, not by search.</p></div>
+        <div class="edge"><p class="t">Document re-processed</p><p class="d">All prior image_store rows for that document are deleted first — a clean slate, no duplicates.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ============ FLOW 2 : RETRIEVAL ============ -->
+  <section class="flow">
+    <div class="flow-head">
+      <span class="flow-tag retrieve">Flow 2 · Question</span>
+      <h2 class="flow-title">A user asks something</h2>
+    </div>
+    <p class="flow-sub">How image-derived knowledge reaches the answer. Remember the core idea: the archive itself is never searched — the search hits the destination store the image's content was copied into at upload.</p>
+
+    <div class="concept" style="border-left-color: var(--retrieve); margin-bottom: 34px;">
+      <h2>Why there is no "search the image_store" step</h2>
+      <p>Because the useful content already lives in a searchable store (with an embedding) by the time any question is asked. A query about a chart or figure is steered toward the <span class="kw">table_store</span> and <span class="kw">vector_store</span> — exactly where image-derived rows were filed. The <span class="kw">source_image_id</span> link back to the original picture exists for traceability; it is not walked during search.</p>
+    </div>
+
+    <div class="spine retrieve">
+
+      <div class="stage retrieve">
+        <div class="node">1</div>
+        <div class="card">
+          <h3>Query arrives</h3>
+          <p>The user's question hits the query API with options like document filters and result count.</p>
+        </div>
+      </div>
+
+      <div class="stage retrieve">
+        <div class="node">2</div>
+        <div class="card">
+          <h3>Conversational gate</h3>
+          <p>Greetings and small talk are answered directly — retrieval is skipped entirely for anything that isn't a real information request.</p>
+        </div>
+      </div>
+
+      <div class="stage retrieve">
+        <div class="node">3</div>
+        <div class="card">
+          <h3>Intent classification — pick the stores</h3>
+          <p>The query is read for intent. Visual words like <em>chart, figure, image, diagram</em> steer the search toward the tables and text stores where image content lives.</p>
+          <div class="branches">
+            <span class="branch-label">Visual query routes to</span>
+            <span class="chip route"><span class="dot"></span>table_store</span>
+            <span class="chip route"><span class="dot"></span>vector_store</span>
+            <span class="chip skip"><span class="dot"></span>image_store is never in the search set</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="stage retrieve">
+        <div class="node">4</div>
+        <div class="card">
+          <h3>Embed the query</h3>
+          <p>The question is embedded with the same BGE model used at upload (with a search-instruction prefix), so it lands in the same 1024-dim space as the stored content.</p>
+        </div>
+      </div>
+
+      <div class="stage retrieve">
+        <div class="node">5</div>
+        <div class="card">
+          <h3>Vector search the destination stores</h3>
+          <p>An HNSW nearest-neighbour search runs across the selected stores — <span class="fld">vector</span>, <span class="fld">clause</span>, <span class="fld">research</span>, <span class="fld">table</span> — concurrently. Image-derived rows (<span class="fld">from_image_store = TRUE</span>) compete here alongside native text on equal terms.</p>
+        </div>
+      </div>
+
+      <div class="stage retrieve">
+        <div class="node">6</div>
+        <div class="card">
+          <h3>Hybrid keyword fusion</h3>
+          <p>When enabled, a full-text keyword search runs in parallel and the two ranked lists are blended (reciprocal-rank fusion). The archive has no keyword index, so it sits this out too.</p>
+        </div>
+      </div>
+
+      <div class="stage retrieve">
+        <div class="node">7</div>
+        <div class="card">
+          <h3>Graph expansion</h3>
+          <p>If the knowledge graph is available, related documents pull in a few extra chunks. Purely additive — a no-op when the graph is offline, and it never touches the archive.</p>
+        </div>
+      </div>
+
+      <div class="stage retrieve">
+        <div class="node">8</div>
+        <div class="card">
+          <h3>Balance &amp; rerank</h3>
+          <p>Results are capped per store so no single source dominates, then a BGE cross-encoder reranker scores each candidate against the exact question and keeps the strongest.</p>
+        </div>
+      </div>
+
+      <div class="stage retrieve">
+        <div class="node">9</div>
+        <div class="card">
+          <h3>Synthesise the answer</h3>
+          <p>The top chunks — including any image-derived ones — are assembled into a context budget and sent to Gemma, which writes a cited answer with a confidence score. The text used is the destination store's copy of the image content.</p>
+          <div class="outcome done">
+            <span>✅</span>
+            <span>The user gets an answer grounded in a chart or table that originally lived as an image — without the retriever ever having to open the archive.</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="edge-block">
+      <h3>Edge cases handled — Flow 2</h3>
+      <div class="edge-grid">
+        <div class="edge"><p class="t">Non-visual question</p><p class="d">Intent routes to text/clause/research stores; image-derived table rows simply don't surface.</p></div>
+        <div class="edge route"><p class="t">Answer comes from a former image</p><p class="d">Served as an ordinary table/text row — the user sees the content, lineage is recorded underneath.</p></div>
+        <div class="edge"><p class="t">Lineage exists but isn't traversed</p><p class="d">source_image_id links a row to its origin image but is not followed during search — it's for audit/trace.</p></div>
+        <div class="edge"><p class="t">No matches</p><p class="d">"No image match" can't happen — images aren't searched. Only the destination stores can come back empty.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider" />
+
+  <!-- ============ SCHEMA ============ -->
+  <p class="section-label">Reference · what an image_store row holds</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Field</th><th>Purpose</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="fld">page_number</span> · <span class="fld">bbox</span></td><td class="desc">Where the image sat in the document.</td></tr>
+        <tr><td><span class="fld">storage_path</span></td><td class="desc">The PNG in Supabase Storage.</td></tr>
+        <tr><td><span class="fld">ocr_text</span></td><td class="desc">Raw OCR reading, unaltered.</td></tr>
+        <tr><td><span class="fld">vlm_ocr_text</span></td><td class="desc">The vision model's own transcription of the text in the image.</td></tr>
+        <tr><td><span class="fld">structured_content</span></td><td class="desc">The vision model's rich extraction (JSON) — the retrieval-ready reading.</td></tr>
+        <tr><td><span class="fld">detected_store</span></td><td class="desc">Which store the content was routed to (decided once, at upload).</td></tr>
+        <tr><td><span class="fld">stored_in</span></td><td class="desc">NULL until the copy is written to that store — then set. NULL = archive-only figure.</td></tr>
+        <tr><td><span class="fld">processing_status</span></td><td class="desc">VLM_PROCESSED · OCR_ONLY · SKIPPED — the pre-filter outcome.</td></tr>
+        <tr><td><span class="fld">image_type</span> · <span class="fld">skip_reason</span> · <span class="fld">filter_stage</span></td><td class="desc">Full audit trail of how the image was classified and why.</td></tr>
+        <tr><td><span class="fld">asset_role</span></td><td class="desc">figure or table_crop.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ============ TAKEAWAYS ============ -->
+  <p class="section-label" style="margin-top:56px;">The two jobs the image_store does</p>
+  <div class="takeaways">
+    <div class="take one">
+      <span class="n">JOB 1</span>
+      <h4>Permanent, auditable archive</h4>
+      <p>Every image ever extracted is kept — with its OCR, vision reading, classification and the reason behind every filter decision. Nothing is silently dropped.</p>
+    </div>
+    <div class="take two">
+      <span class="n">JOB 2</span>
+      <h4>Lineage anchor</h4>
+      <p>Any answer chunk that came from a picture can be traced straight back to that picture via <span class="fld">source_image_id</span> — proof of where a number or fact originated.</p>
+    </div>
+  </div>
+
+  <footer>Multi-Store RAG Chatbot · image_store pipeline · ingestion + retrieval</footer>
+
+</div>

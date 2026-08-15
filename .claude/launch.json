@@ -1,0 +1,26 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend-api",
+      "runtimeExecutable": ".venv/Scripts/uvicorn.exe",
+      "runtimeArgs": ["app.main:app", "--reload", "--port", "8000"],
+      "cwd": "backend",
+      "port": 8000
+    },
+    {
+      "name": "celery-worker",
+      "runtimeExecutable": ".venv/Scripts/celery.exe",
+      "runtimeArgs": ["-A", "app.core.background_tasks", "worker", "--loglevel=info", "-Q", "ingestion,celery,parse,embed,graph"],
+      "cwd": "backend",
+      "port": 5555
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "frontend",
+      "port": 3000
+    }
+  ]
+}
