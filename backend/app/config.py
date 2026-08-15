@@ -22,17 +22,25 @@ class Settings(BaseSettings):
     SUPABASE_STORAGE_BUCKET: str = "rag-documents"
     DB_SSLMODE: str = "require"
 
-    # ── CDAC Gemma 4 ──────────────────────────────────────────
+    # ── LLM (Groq / CDAC Gemma 4 / OpenAI-compatible) ─────────
     GEMMA4_BASE_URL: str = ""
     GEMMA4_API_KEY: str = ""
-    GEMMA4_MODEL_NAME: str = "gemma-4-27b-it"
+    GEMMA4_MODEL_NAME: str = "llama-3.3-70b-versatile"
     GEMMA4_TIMEOUT_SECONDS: int = 120          # read timeout (model generation)
     GEMMA4_CONNECT_TIMEOUT_SECONDS: int = 10   # fail fast when the endpoint is down
     GEMMA4_MAX_RETRIES: int = 2                # retries on transient 5xx / connect errors
     GEMMA4_MAX_TOKENS: int = 800               # 800 tokens covers most RAG answers; 2048 caused ~3× latency
-    # Max parallel Gemma calls from the async query path. Excess requests queue
-    # rather than flooding the CDAC endpoint with parallel connections.
     GEMMA4_MAX_CONCURRENT: int = 5
+
+    # Groq-named settings (automatically synced to GEMMA4_* for backwards compatibility)
+    GROQ_BASE_URL: str = ""
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL_NAME: str = ""
+    GROQ_TIMEOUT_SECONDS: int | None = None
+    GROQ_CONNECT_TIMEOUT_SECONDS: int | None = None
+    GROQ_MAX_RETRIES: int | None = None
+    GROQ_MAX_TOKENS: int | None = None
+    GROQ_MAX_CONCURRENT: int | None = None
     # Use the LLM to classify query intent (which stores to search). Off by
     # default: it adds a full Gemma round-trip on the critical path, and the
     # rule-based fallback is instant and recall-safe (searches all stores when
@@ -423,6 +431,37 @@ class Settings(BaseSettings):
             f"postgresql://{self.SUPABASE_USER}:{quote_plus(self.SUPABASE_PASSWORD)}"
             f"@{self.SUPABASE_HOST}:{self.SUPABASE_PORT}/{self.SUPABASE_DB}"
         )
+
+    def model_post_init(self, __context) -> None:
+        # Strip potential trailing/leading whitespace from Supabase & Neo4j config
+        self.SUPABASE_HOST = self.SUPABASE_HOST.strip()
+        self.SUPABASE_URL = self.SUPABASE_URL.strip()
+        self.SUPABASE_USER = self.SUPABASE_USER.strip()
+        self.SUPABASE_PASSWORD = self.SUPABASE_PASSWORD.strip()
+        self.NEO4J_URI = self.NEO4J_URI.strip()
+        self.NEO4J_USERNAME = self.NEO4J_USERNAME.strip()
+        self.NEO4J_PASSWORD = self.NEO4J_PASSWORD.strip()
+        self.NEO4J_DATABASE = self.NEO4J_DATABASE.strip()
+
+        # Automatic GROQ -> GEMMA4 sync
+        if self.GROQ_API_KEY and not self.GEMMA4_API_KEY:
+            self.GEMMA4_API_KEY = self.GROQ_API_KEY.strip()
+        if self.GROQ_BASE_URL and not self.GEMMA4_BASE_URL:
+            self.GEMMA4_BASE_URL = self.GROQ_BASE_URL.strip()
+        elif not self.GEMMA4_BASE_URL and self.GEMMA4_API_KEY and self.GEMMA4_API_KEY.startswith("gsk_"):
+            self.GEMMA4_BASE_URL = "https://api.groq.com/openai/v1"
+        if self.GROQ_MODEL_NAME:
+            self.GEMMA4_MODEL_NAME = self.GROQ_MODEL_NAME.strip()
+        if self.GROQ_TIMEOUT_SECONDS is not None:
+            self.GEMMA4_TIMEOUT_SECONDS = self.GROQ_TIMEOUT_SECONDS
+        if self.GROQ_CONNECT_TIMEOUT_SECONDS is not None:
+            self.GEMMA4_CONNECT_TIMEOUT_SECONDS = self.GROQ_CONNECT_TIMEOUT_SECONDS
+        if self.GROQ_MAX_RETRIES is not None:
+            self.GEMMA4_MAX_RETRIES = self.GROQ_MAX_RETRIES
+        if self.GROQ_MAX_TOKENS is not None:
+            self.GEMMA4_MAX_TOKENS = self.GROQ_MAX_TOKENS
+        if self.GROQ_MAX_CONCURRENT is not None:
+            self.GEMMA4_MAX_CONCURRENT = self.GROQ_MAX_CONCURRENT
 
     @property
     def max_upload_bytes(self) -> int:
