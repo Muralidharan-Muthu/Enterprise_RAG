@@ -23,10 +23,10 @@ def create_run(
             cur.execute(
                 """
                 INSERT INTO multi_store_rag_working.pipeline_runs
-                    (id, name, description, source, domain, sub_domain, category, sub_category)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    (id, name, description, source)
+                VALUES (%s, %s, %s, %s)
                 """,
-                (run_id, name, description, source, domain, sub_domain, category, sub_category),
+                (run_id, name, description, source),
             )
     return run_id
 
@@ -38,8 +38,7 @@ def get_run(run_id: str) -> dict | None:
             # Pipeline overview
             cur.execute(
                 """
-                SELECT id, name, description, source, domain, sub_domain, category,
-                       sub_category, started_at, created_at,
+                SELECT id, name, description, source, started_at, created_at,
                        files_found, files_processed, files_failed, status
                 FROM multi_store_rag_working.pipeline_run_overview
                 WHERE id = %s
@@ -52,11 +51,10 @@ def get_run(run_id: str) -> dict | None:
 
             run = {
                 "id": str(row[0]), "name": row[1], "description": row[2],
-                "source": row[3], "domain": row[4], "sub_domain": row[5],
-                "category": row[6], "sub_category": row[7],
-                "started_at": row[8], "created_at": row[9],
-                "files_found": row[10] or 0, "files_processed": row[11] or 0,
-                "files_failed": row[12] or 0, "status": row[13],
+                "source": row[3],
+                "started_at": row[4], "created_at": row[5],
+                "files_found": row[6] or 0, "files_processed": row[7] or 0,
+                "files_failed": row[8] or 0, "status": row[9],
             }
 
             # Documents + job status
@@ -179,8 +177,7 @@ def list_runs(limit: int = 20, offset: int = 0) -> tuple[list[dict], int]:
 
             cur.execute(
                 """
-                SELECT id, name, description, source, domain, sub_domain, category,
-                       sub_category, started_at, created_at,
+                SELECT id, name, description, source, started_at, created_at,
                        files_found, files_processed, files_failed, status
                 FROM multi_store_rag_working.pipeline_run_overview
                 ORDER BY created_at DESC
@@ -196,16 +193,12 @@ def list_runs(limit: int = 20, offset: int = 0) -> tuple[list[dict], int]:
             "name": r[1],
             "description": r[2],
             "source": r[3],
-            "domain": r[4],
-            "sub_domain": r[5],
-            "category": r[6],
-            "sub_category": r[7],
-            "started_at": r[8],
-            "created_at": r[9],
-            "files_found": r[10] or 0,
-            "files_processed": r[11] or 0,
-            "files_failed": r[12] or 0,
-            "status": r[13],
+            "started_at": r[4],
+            "created_at": r[5],
+            "files_found": r[6] or 0,
+            "files_processed": r[7] or 0,
+            "files_failed": r[8] or 0,
+            "status": r[9],
         }
         for r in rows
     ]

@@ -22,12 +22,6 @@ CREATE TABLE IF NOT EXISTS multi_store_rag_working.pipeline_runs (
     -- Where the files came from: 'local' | 'gdrive' | 'sharepoint'
     source          TEXT NOT NULL DEFAULT 'local',
 
-    -- Taxonomy (UI metadata for the batch)
-    domain          TEXT,
-    sub_domain      TEXT,
-    category        TEXT,
-    sub_category    TEXT,
-
     started_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -70,10 +64,6 @@ SELECT
     p.name,
     p.description,
     p.source,
-    p.domain,
-    p.sub_domain,
-    p.category,
-    p.sub_category,
     p.started_at,
     p.created_at,
     COUNT(d.id)                                                        AS files_found,

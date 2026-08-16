@@ -66,10 +66,6 @@ export const apiClient = {
     form.append("name", input.name);
     if (input.description) form.append("description", input.description);
     form.append("source", input.source ?? "local");
-    if (input.domain) form.append("domain", input.domain);
-    if (input.sub_domain) form.append("sub_domain", input.sub_domain);
-    if (input.category) form.append("category", input.category);
-    if (input.sub_category) form.append("sub_category", input.sub_category);
     for (const file of input.files) form.append("files", file);
 
     const res = await fetch(`${BASE}/api/v1/ingest/pipeline`, {

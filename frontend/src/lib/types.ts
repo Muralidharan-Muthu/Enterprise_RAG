@@ -74,10 +74,6 @@ export interface PipelineCreateInput {
   name: string;
   description?: string;
   source?: PipelineSource;
-  domain?: string;
-  sub_domain?: string;
-  category?: string;
-  sub_category?: string;
   files: File[];
 }
 
@@ -103,10 +99,10 @@ export interface PipelineRunSummary {
   name: string;
   description: string | null;
   source: PipelineSource;
-  domain: string | null;
-  sub_domain: string | null;
-  category: string | null;
-  sub_category: string | null;
+  domain?: string | null;
+  sub_domain?: string | null;
+  category?: string | null;
+  sub_category?: string | null;
   files_found: number;
   files_processed: number;
   files_failed: number;

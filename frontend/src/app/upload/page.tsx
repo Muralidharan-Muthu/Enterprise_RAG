@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Upload,
@@ -12,12 +12,10 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
-  ChevronDown,
 } from "lucide-react";
 import { FileDropzone } from "@/components/upload/FileDropzone";
 import { apiClient } from "@/lib/api-client";
 import { cn, formatBytes } from "@/lib/utils";
-import { TAXONOMY } from "@/lib/taxonomy";
 import type { PipelineSource } from "@/lib/types";
 
 interface StagedFile {
@@ -28,82 +26,14 @@ interface StagedFile {
 export default function UploadPage() {
   const qc = useQueryClient();
 
-  const domains = Object.keys(TAXONOMY);
-
   const [source, setSource] = useState<PipelineSource>("local");
   const [pipelineName, setPipelineName] = useState("");
   const [description, setDescription] = useState("");
-  // Tracks whether the user typed their own description. When true, leaf
-  // selection must NOT overwrite it; auto-fill resumes only if they clear it.
-  const [descriptionEdited, setDescriptionEdited] = useState(false);
-
-  // No defaults — user picks one level at a time.
-  const [domain, setDomain] = useState("");
-  const [subDomain, setSubDomain] = useState("");
-  const [category, setCategory] = useState("");
-  const [subCategory, setSubCategory] = useState("");
-
-  const subDomains =
-    domain && TAXONOMY[domain] ? Object.keys(TAXONOMY[domain]) : [];
-  const categories =
-    domain && subDomain && TAXONOMY[domain]?.[subDomain]
-      ? Object.keys(TAXONOMY[domain][subDomain])
-      : [];
-  const subCategoryLeaves =
-    domain && subDomain && category && TAXONOMY[domain]?.[subDomain]?.[category]
-      ? TAXONOMY[domain][subDomain][category]
-      : [];
-  const subCategoryNames = subCategoryLeaves.map((l) => l.name);
 
   const [staged, setStaged] = useState<StagedFile[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const onDescriptionChange = (v: string) => {
-    setDescription(v);
-    setDescriptionEdited(v.trim() !== "");
-  };
-  const autoFill = (desc: string) => {
-    if (!descriptionEdited) setDescription(desc);
-  };
-
-  // Each level resets its descendants; auto-description clears until a leaf
-  // is chosen again (unless the user has typed their own).
-  const onDomainChange = (d: string) => {
-    setDomain(d);
-    if (d === "Others") {
-      setSubDomain("Others");
-      setCategory("Others");
-      setSubCategory("Others");
-    } else {
-      setSubDomain("");
-      setCategory("");
-      setSubCategory("");
-    }
-    autoFill("");
-  };
-  const onSubDomainChange = (sd: string) => {
-    setSubDomain(sd);
-    if (sd === "Others") {
-      setCategory("Others");
-      setSubCategory("Others");
-    } else {
-      setCategory("");
-      setSubCategory("");
-    }
-    autoFill("");
-  };
-  const onCategoryChange = (c: string) => {
-    setCategory(c);
-    setSubCategory(c === "Others" ? "Others" : "");
-    autoFill("");
-  };
-  const onSubCategoryChange = (name: string) => {
-    setSubCategory(name);
-    const leaf = subCategoryLeaves.find((l) => l.name === name);
-    if (leaf) autoFill(leaf.description);
-  };
 
   const addFiles = useCallback((files: File[]) => {
     setStaged((prev) => [
@@ -118,9 +48,6 @@ export default function UploadPage() {
   const canSubmit =
     source === "local" &&
     pipelineName.trim().length > 0 &&
-    !!domain &&
-    !!subDomain &&
-    !!category &&
     staged.length > 0 &&
     !submitting;
 
@@ -134,10 +61,6 @@ export default function UploadPage() {
         name: pipelineName.trim(),
         description: description.trim() || undefined,
         source,
-        domain,
-        sub_domain: subDomain,
-        category,
-        sub_category: subCategory,
         files: staged.map((f) => f.file),
       });
       setResult(
@@ -146,11 +69,6 @@ export default function UploadPage() {
       setStaged([]);
       setPipelineName("");
       setDescription("");
-      setDescriptionEdited(false);
-      setDomain("");
-      setSubDomain("");
-      setCategory("");
-      setSubCategory("");
       qc.invalidateQueries({ queryKey: ["pipelines"] });
       qc.invalidateQueries({ queryKey: ["documents"] });
     } catch (err) {
@@ -230,48 +148,9 @@ export default function UploadPage() {
               <input
                 type="text"
                 value={description}
-                onChange={(e) => onDescriptionChange(e.target.value)}
+                onChange={(e) => setDescription(e.target.value)}
                 placeholder="Optional — describe this batch"
                 className="w-full rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none"
-              />
-            </Field>
-          </div>
-
-          {/* Taxonomy dropdowns — revealed one level at a time */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Field label="Domain" required>
-              <Dropdown
-                value={domain}
-                onChange={onDomainChange}
-                options={domains}
-                placeholder="Select Domain"
-              />
-            </Field>
-            <Field label="Sub-Domain" required>
-              <Dropdown
-                value={subDomain}
-                onChange={onSubDomainChange}
-                options={subDomains}
-                placeholder="Select Sub-Domain"
-                disabled={!domain}
-              />
-            </Field>
-            <Field label="Category" required>
-              <Dropdown
-                value={category}
-                onChange={onCategoryChange}
-                options={categories}
-                placeholder="Select Category"
-                disabled={!subDomain}
-              />
-            </Field>
-            <Field label="Sub-Category">
-              <Dropdown
-                value={subCategory}
-                onChange={onSubCategoryChange}
-                options={subCategoryNames}
-                placeholder="Select Sub-Category"
-                disabled={!category}
               />
             </Field>
           </div>
@@ -369,82 +248,4 @@ function Field({
   );
 }
 
-/**
- * Custom dropdown: list always opens downward, shows ~5 rows then scrolls,
- * and uses a placeholder until the user picks (no default selection).
- */
-function Dropdown({
-  value,
-  onChange,
-  options,
-  placeholder,
-  disabled,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: string[];
-  placeholder: string;
-  disabled?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, []);
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => setOpen((o) => !o)}
-        className={cn(
-          "w-full flex items-center justify-between rounded-lg border px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-400 outline-none",
-          disabled
-            ? "border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-60"
-            : "border-gray-500 bg-white dark:bg-gray-900 hover:border-gray-700"
-        )}
-      >
-        <span className={value ? "text-gray-900 dark:text-gray-100" : "text-gray-400 dark:text-gray-500"}>
-          {value || placeholder}
-        </span>
-        <ChevronDown
-          className={cn(
-            "h-4 w-4 text-gray-400 dark:text-gray-500 transition-transform",
-            open && "rotate-180"
-          )}
-        />
-      </button>
-
-      {open && (
-        // max-h ≈ 5 rows (each ~40px) then scrolls.
-        <ul className="absolute z-20 mt-1 w-full max-h-[200px] overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 py-1 shadow-lg">
-          {[...options, "Others"].map((o) => (
-            <li key={o}>
-              <button
-                type="button"
-                onClick={() => {
-                  onChange(o);
-                  setOpen(false);
-                }}
-                className={cn(
-                  "w-full px-3 py-2 text-left text-sm hover:bg-blue-50 dark:hover:bg-blue-950 text-gray-700 dark:text-gray-300",
-                  o === value && "bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300"
-                )}
-              >
-                {o}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}

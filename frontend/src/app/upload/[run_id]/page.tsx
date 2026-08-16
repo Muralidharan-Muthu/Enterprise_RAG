@@ -158,7 +158,6 @@ export default function PipelineDetailPage() {
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{run.description}</p>
           )}
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-gray-400 dark:text-gray-500">
-            {run.domain && <span>{run.domain}{run.sub_domain ? ` › ${run.sub_domain}` : ""}{run.category ? ` › ${run.category}` : ""}</span>}
             <span>Started {formatDate(run.started_at ?? run.created_at)}</span>
             <span className="capitalize">{run.source}</span>
           </div>
