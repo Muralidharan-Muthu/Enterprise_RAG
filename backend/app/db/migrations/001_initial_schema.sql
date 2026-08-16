@@ -340,6 +340,7 @@ CREATE TABLE IF NOT EXISTS multi_store_rag_working.ingestion_jobs (
 
     -- Per-stage durations (seconds): {"parsing": 12.3, "routing": 2.1, ...}
     stage_timings    JSONB DEFAULT '{}',
+    stage_detail     JSONB DEFAULT '{}',
 
     -- Error info
     error_message    TEXT,

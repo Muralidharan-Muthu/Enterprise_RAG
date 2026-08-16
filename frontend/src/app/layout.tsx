@@ -10,6 +10,9 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Multi-Store RAG Chatbot",
   description: "Enterprise Agentic RAG — Multi-Retriever Document Intelligence",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default function RootLayout({
