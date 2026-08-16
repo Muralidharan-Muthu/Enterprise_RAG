@@ -21,14 +21,11 @@ with gr.Blocks(title="Multi-Store RAG Backend API") as demo:
     btn = gr.Button("Check ZeroGPU Status")
     btn.click(fn=gpu_ping, inputs=inp, outputs=out)
 
-# Register all FastAPI routes directly onto demo.app
-demo.app.include_router(fastapi_app.router)
-for route in fastapi_app.routes:
-    if route not in demo.app.routes:
-        demo.app.routes.append(route)
-
-demo.app.mount("/api", fastapi_app)
+# Mount Gradio UI at /gradio and /ui while keeping all FastAPI routes at root
+app = gr.mount_gradio_app(fastapi_app, demo, path="/gradio")
+gr.mount_gradio_app(fastapi_app, demo, path="/ui")
 
 if __name__ == "__main__":
+    import uvicorn
     port = int(os.getenv("PORT", 7860))
-    demo.launch(server_name="0.0.0.0", server_port=port)
+    uvicorn.run(fastapi_app, host="0.0.0.0", port=port)
