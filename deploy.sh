@@ -14,6 +14,16 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+# Autodetect and include Docker Desktop in PATH if installed in AppData or Program Files
+for DOCKER_DIR in \
+    "$LOCALAPPDATA/Programs/DockerDesktop/resources/bin" \
+    "/c/Users/mural/AppData/Local/Programs/DockerDesktop/resources/bin" \
+    "/c/Program Files/Docker/Docker/resources/bin"; do
+    if [ -d "$DOCKER_DIR" ]; then
+        export PATH="$DOCKER_DIR:$PATH"
+    fi
+done
+
 echo -e "${CYAN}"
 echo "============================================================"
 echo "   🚀 Multi-Store RAG Chatbot - One-Click Deployment"

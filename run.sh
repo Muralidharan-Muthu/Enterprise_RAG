@@ -19,6 +19,16 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Autodetect and include Docker Desktop in PATH if installed in AppData or Program Files
+for DOCKER_DIR in \
+    "$LOCALAPPDATA/Programs/DockerDesktop/resources/bin" \
+    "/c/Users/mural/AppData/Local/Programs/DockerDesktop/resources/bin" \
+    "/c/Program Files/Docker/Docker/resources/bin"; do
+    if [ -d "$DOCKER_DIR" ]; then
+        export PATH="$DOCKER_DIR:$PATH"
+    fi
+done
+
 echo -e "${CYAN}"
 echo "============================================================"
 echo "   🚀 Multi-Store RAG Chatbot - Starting Full Stack"

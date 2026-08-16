@@ -443,28 +443,9 @@ class Settings(BaseSettings):
         self.NEO4J_PASSWORD = self.NEO4J_PASSWORD.strip()
         self.NEO4J_DATABASE = self.NEO4J_DATABASE.strip()
 
-        # Fully synchronize GROQ and GEMMA4 settings
-        api_key = (self.GROQ_API_KEY or self.GEMMA4_API_KEY or "").strip()
-        base_url = (self.GROQ_BASE_URL or self.GEMMA4_BASE_URL or "https://api.groq.com/openai/v1").strip()
-        model_name = (self.GROQ_MODEL_NAME or self.GEMMA4_MODEL_NAME or "llama-3.3-70b-versatile").strip()
-
-        self.GROQ_API_KEY = api_key
-        self.GEMMA4_API_KEY = api_key
-        self.GROQ_BASE_URL = base_url
-        self.GEMMA4_BASE_URL = base_url
-        self.GROQ_MODEL_NAME = model_name
-        self.GEMMA4_MODEL_NAME = model_name
-
-        if self.GROQ_TIMEOUT_SECONDS is not None:
-            self.GEMMA4_TIMEOUT_SECONDS = self.GROQ_TIMEOUT_SECONDS
-        if self.GROQ_CONNECT_TIMEOUT_SECONDS is not None:
-            self.GEMMA4_CONNECT_TIMEOUT_SECONDS = self.GROQ_CONNECT_TIMEOUT_SECONDS
-        if self.GROQ_MAX_RETRIES is not None:
-            self.GEMMA4_MAX_RETRIES = self.GROQ_MAX_RETRIES
-        if self.GROQ_MAX_TOKENS is not None:
-            self.GEMMA4_MAX_TOKENS = self.GROQ_MAX_TOKENS
-        if self.GROQ_MAX_CONCURRENT is not None:
-            self.GEMMA4_MAX_CONCURRENT = self.GROQ_MAX_CONCURRENT
+        self.GROQ_API_KEY = self.GROQ_API_KEY.strip()
+        self.GROQ_BASE_URL = self.GROQ_BASE_URL.strip()
+        self.GROQ_MODEL_NAME = self.GROQ_MODEL_NAME.strip()
 
     @property
     def max_upload_bytes(self) -> int:
