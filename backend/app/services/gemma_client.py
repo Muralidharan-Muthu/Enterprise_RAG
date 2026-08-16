@@ -31,16 +31,45 @@ def _backoff(attempt: int) -> float:
     return min(0.5 * (2 ** (attempt - 1)), 4.0)
 
 
+def _base_url() -> str:
+    return (settings.GROQ_BASE_URL or settings.GEMMA4_BASE_URL or "https://api.groq.com/openai/v1").rstrip("/")
+
+
+def _api_key() -> str:
+    return settings.GROQ_API_KEY or settings.GEMMA4_API_KEY
+
+
+def _model_name() -> str:
+    return settings.GROQ_MODEL_NAME or settings.GEMMA4_MODEL_NAME or "llama-3.3-70b-versatile"
+
+
+def _timeout_seconds() -> int:
+    return settings.GROQ_TIMEOUT_SECONDS or settings.GEMMA4_TIMEOUT_SECONDS or 60
+
+
+def _connect_timeout() -> int:
+    return settings.GROQ_CONNECT_TIMEOUT_SECONDS or settings.GEMMA4_CONNECT_TIMEOUT_SECONDS or 10
+
+
+def _max_retries() -> int:
+    return settings.GROQ_MAX_RETRIES if settings.GROQ_MAX_RETRIES is not None else settings.GEMMA4_MAX_RETRIES
+
+
+def _max_concurrent() -> int:
+    return settings.GROQ_MAX_CONCURRENT or settings.GEMMA4_MAX_CONCURRENT or 5
+
+
 def _build_headers() -> dict:
-    h = {"Content-Type": "application/json"}
-    if settings.GEMMA4_API_KEY:
-        h["Authorization"] = f"Bearer {settings.GEMMA4_API_KEY}"
+    h = {"Content-Type": "application/json", "User-Agent": "MultiStoreRAG/1.0"}
+    key = _api_key()
+    if key:
+        h["Authorization"] = f"Bearer {key}"
     return h
 
 
 def _build_payload(messages: list, max_tokens: int, temperature: float) -> dict:
     return {
-        "model": settings.GEMMA4_MODEL_NAME,
+        "model": _model_name(),
         "messages": messages,
         "max_tokens": max_tokens,
         "temperature": temperature,
@@ -49,10 +78,10 @@ def _build_payload(messages: list, max_tokens: int, temperature: float) -> dict:
 
 def _timeout() -> httpx.Timeout:
     return httpx.Timeout(
-        connect=settings.GEMMA4_CONNECT_TIMEOUT_SECONDS,
-        read=settings.GEMMA4_TIMEOUT_SECONDS,
-        write=settings.GEMMA4_CONNECT_TIMEOUT_SECONDS,
-        pool=settings.GEMMA4_CONNECT_TIMEOUT_SECONDS,
+        connect=_connect_timeout(),
+        read=_timeout_seconds(),
+        write=_connect_timeout(),
+        pool=_connect_timeout(),
     )
 
 
@@ -106,16 +135,13 @@ def chat(
     retries: int | None = None,
     timeout: float | None = None,
 ) -> str:
-    """Sync Gemma call — retries transient connect errors and 429/5xx.
-    Does NOT retry ReadTimeout (model is already generating). Thread-safe.
-    `timeout` (seconds) overrides the pooled client's read timeout for this
-    call only — larger multi-item prompts (e.g. batched clause enrichment)
-    need a longer read budget than a single-answer request."""
-    if not settings.GEMMA4_BASE_URL:
-        raise RuntimeError("GEMMA4_BASE_URL not configured")
+    """Sync LLM (Groq) call — retries transient connect errors and 429/5xx."""
+    base = _base_url()
+    if not base:
+        raise RuntimeError("LLM BASE_URL not configured")
 
-    attempts = (settings.GEMMA4_MAX_RETRIES if retries is None else retries) + 1
-    url = f"{settings.GEMMA4_BASE_URL.rstrip('/')}/chat/completions"
+    attempts = (_max_retries() if retries is None else retries) + 1
+    url = f"{base}/chat/completions"
     headers = _build_headers()
     payload = _build_payload(messages, max_tokens, temperature)
     client = _get_client()
@@ -130,27 +156,27 @@ def chat(
             else:
                 resp = client.post(url, json=payload, headers=headers)
             if resp.status_code in _RETRYABLE_STATUS and attempt < attempts:
-                logger.warning("Gemma %s (attempt %d/%d) — retrying", resp.status_code, attempt, attempts)
+                logger.warning("LLM %s (attempt %d/%d) — retrying", resp.status_code, attempt, attempts)
                 time.sleep(_backoff(attempt))
                 continue
             resp.raise_for_status()
             return resp.json()["choices"][0]["message"]["content"].strip()
         except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout) as exc:
             last_exc = exc
-            logger.warning("Gemma connect error (attempt %d/%d): %s", attempt, attempts, exc)
+            logger.warning("LLM connect error (attempt %d/%d): %s", attempt, attempts, exc)
             if attempt < attempts:
                 time.sleep(_backoff(attempt))
                 continue
             raise
         except httpx.ReadTimeout:
-            logger.warning("Gemma read timeout after %ds", settings.GEMMA4_TIMEOUT_SECONDS)
+            logger.warning("LLM read timeout after %ds", _timeout_seconds())
             raise
         finally:
             semaphore.release()
 
     if last_exc:
         raise last_exc
-    raise RuntimeError("Gemma call failed after retries")
+    raise RuntimeError("LLM call failed after retries")
 
 
 # ── Async client + semaphore (FastAPI query path) ─────────────────────────────
@@ -171,7 +197,7 @@ def _get_semaphore() -> asyncio.Semaphore:
     """Lazy singleton — safe because asyncio is single-threaded."""
     global _semaphore
     if _semaphore is None:
-        _semaphore = asyncio.Semaphore(settings.GEMMA4_MAX_CONCURRENT)
+        _semaphore = asyncio.Semaphore(_max_concurrent())
     return _semaphore
 
 
@@ -181,14 +207,15 @@ async def chat_async(
     temperature: float = 0.1,
     retries: int | None = None,
 ) -> str:
-    """Async Gemma call — acquires a semaphore slot so at most
-    GEMMA4_MAX_CONCURRENT requests run in parallel. Uses asyncio.sleep for
+    """Async LLM call — acquires a semaphore slot so at most
+    MAX_CONCURRENT requests run in parallel. Uses asyncio.sleep for
     backoff so the event loop stays responsive during retries."""
-    if not settings.GEMMA4_BASE_URL:
-        raise RuntimeError("GEMMA4_BASE_URL not configured")
+    base = _base_url()
+    if not base:
+        raise RuntimeError("LLM BASE_URL not configured")
 
-    attempts = (settings.GEMMA4_MAX_RETRIES if retries is None else retries) + 1
-    url = f"{settings.GEMMA4_BASE_URL.rstrip('/')}/chat/completions"
+    attempts = (_max_retries() if retries is None else retries) + 1
+    url = f"{base}/chat/completions"
     headers = _build_headers()
     payload = _build_payload(messages, max_tokens, temperature)
     last_exc: Exception | None = None
@@ -200,7 +227,7 @@ async def chat_async(
                 resp = await client.post(url, json=payload, headers=headers)
                 if resp.status_code in _RETRYABLE_STATUS and attempt < attempts:
                     logger.warning(
-                        "Gemma %s (attempt %d/%d) — retrying", resp.status_code, attempt, attempts
+                        "LLM %s (attempt %d/%d) — retrying", resp.status_code, attempt, attempts
                     )
                     await asyncio.sleep(_backoff(attempt))
                     continue
@@ -208,18 +235,18 @@ async def chat_async(
                 return resp.json()["choices"][0]["message"]["content"].strip()
             except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout) as exc:
                 last_exc = exc
-                logger.warning("Gemma connect error (attempt %d/%d): %s", attempt, attempts, exc)
+                logger.warning("LLM connect error (attempt %d/%d): %s", attempt, attempts, exc)
                 if attempt < attempts:
                     await asyncio.sleep(_backoff(attempt))
                     continue
                 raise
             except httpx.ReadTimeout:
-                logger.warning("Gemma read timeout after %ds", settings.GEMMA4_TIMEOUT_SECONDS)
+                logger.warning("LLM read timeout after %ds", _timeout_seconds())
                 raise
 
     if last_exc:
         raise last_exc
-    raise RuntimeError("Gemma async call failed after retries")
+    raise RuntimeError("LLM async call failed after retries")
 
 
 async def chat_async_stream(
@@ -227,13 +254,12 @@ async def chat_async_stream(
     max_tokens: int,
     temperature: float = 0.1,
 ):
-    """Async streaming Gemma call — yields text delta strings via SSE.
-    Uses the same semaphore as chat_async so GEMMA4_MAX_CONCURRENT is respected.
-    The semaphore slot is held for the full stream duration."""
-    if not settings.GEMMA4_BASE_URL:
-        raise RuntimeError("GEMMA4_BASE_URL not configured")
+    """Async streaming LLM call — yields text delta strings via SSE."""
+    base = _base_url()
+    if not base:
+        raise RuntimeError("LLM BASE_URL not configured")
 
-    url = f"{settings.GEMMA4_BASE_URL.rstrip('/')}/chat/completions"
+    url = f"{base}/chat/completions"
     headers = _build_headers()
     payload = _build_payload(messages, max_tokens, temperature)
     payload["stream"] = True
@@ -257,3 +283,5 @@ async def chat_async_stream(
                         yield delta
                 except (ValueError, KeyError, IndexError):
                     continue
+
+

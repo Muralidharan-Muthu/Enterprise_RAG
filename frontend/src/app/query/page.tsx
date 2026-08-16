@@ -967,7 +967,7 @@ function buildPipelineStages(embeddingModel: string, rerankerName: string) {
     },
     {
       id: "synthesize",
-      label: "Gemma 4 synthesizing",
+      label: "Groq LLM synthesizing",
       model: "",
       detail: "Building answer from retrieved context",
       estimatedMs: Infinity,

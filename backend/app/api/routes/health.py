@@ -36,17 +36,19 @@ def _check_neo4j() -> str:
         return "unreachable"
  
  
-def _check_gemma() -> str:
-    if not settings.GEMMA4_BASE_URL:
+def _check_groq() -> str:
+    base_url = settings.GROQ_BASE_URL or settings.GEMMA4_BASE_URL
+    api_key = settings.GROQ_API_KEY or settings.GEMMA4_API_KEY
+    if not base_url or not api_key:
         return "not_configured"
     try:
+        headers = {"Authorization": f"Bearer {api_key}", "User-Agent": "MultiStoreRAG/1.0"}
         with httpx.Client(timeout=5) as client:
-            # Try a lightweight endpoint — most LLM servers expose /health or /
-            url = settings.GEMMA4_BASE_URL.rstrip("/") + "/health"
-            r = client.get(url)
-            return "ok" if r.status_code < 500 else "error"
+            url = f"{base_url.rstrip('/')}/models"
+            r = client.get(url, headers=headers)
+            return "ok" if r.status_code == 200 else "error"
     except Exception as exc:
-        logger.warning("Gemma health check failed: %s", exc)
+        logger.warning("Groq health check failed: %s", exc)
         return "unreachable"
  
  
@@ -54,25 +56,29 @@ def _check_gemma() -> str:
 def health_check():
     db_status = "ok" if check_db_health() else "unreachable"
     redis_status = _check_redis()
-    gemma_status = _check_gemma()
+    groq_status = _check_groq()
     neo4j_status = _check_neo4j()
  
     # neo4j is best-effort (degradation-safe) so it never drags overall health down.
     overall = (
         "ok"
-        if db_status == "ok" and redis_status == "ok"
+        if db_status == "ok" and redis_status == "ok" and groq_status == "ok"
         else "degraded"
     )
+ 
+    llm_model = settings.GROQ_MODEL_NAME or settings.GEMMA4_MODEL_NAME
  
     return HealthResponse(
         status=overall,
         api="ok",
         database=db_status,
         redis=redis_status,
-        gemma_endpoint=gemma_status,
+        groq_endpoint=groq_status,
+        gemma_endpoint=groq_status,
         neo4j=neo4j_status,
         timestamp=datetime.now(timezone.utc),
         embedding_model=settings.BGE_MODEL_NAME.split("/")[-1],
         reranker_name=settings.RERANKER_NAME.split("/")[-1],
-        gemma_model=settings.GEMMA4_MODEL_NAME,
+        groq_model=llm_model,
+        gemma_model=llm_model,
     )

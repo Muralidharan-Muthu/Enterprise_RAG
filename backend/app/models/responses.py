@@ -160,9 +160,11 @@ class HealthResponse(BaseModel):
     api: str
     database: str
     redis: str
-    gemma_endpoint: str
+    groq_endpoint: str = "ok"
+    gemma_endpoint: str = "ok"
     neo4j: str = "disabled"
     timestamp: datetime
     embedding_model: str = ""
     reranker_name: str = ""
+    groq_model: str = ""
     gemma_model: str = ""

@@ -24,8 +24,7 @@ export function Header() {
           <>
             <StatusDot label="API" status={health.api} />
             <StatusDot label="DB" status={health.database} />
-            <StatusDot label="Redis" status={health.redis} />
-            <StatusDot label="Gemma" status={health.gemma_endpoint} />
+            <StatusDot label="Groq LLM" status={health.groq_endpoint || health.gemma_endpoint} />
             <StatusDot label="Neo4j" status={health.neo4j} />
           </>
         ) : isError ? (

@@ -22,25 +22,25 @@ class Settings(BaseSettings):
     SUPABASE_STORAGE_BUCKET: str = "rag-documents"
     DB_SSLMODE: str = "require"
 
-    # ── LLM (Groq / CDAC Gemma 4 / OpenAI-compatible) ─────────
+    # ── LLM (Groq API - Primary) ──────────────────────────────
+    GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL_NAME: str = "llama-3.3-70b-versatile"
+    GROQ_TIMEOUT_SECONDS: int = 120          # read timeout (model generation)
+    GROQ_CONNECT_TIMEOUT_SECONDS: int = 10   # fail fast when endpoint is down
+    GROQ_MAX_RETRIES: int = 2                # retries on transient 5xx / connect errors
+    GROQ_MAX_TOKENS: int = 800               # max output tokens per answer
+    GROQ_MAX_CONCURRENT: int = 5
+
+    # Backward-compatibility GEMMA4_* aliases
     GEMMA4_BASE_URL: str = ""
     GEMMA4_API_KEY: str = ""
-    GEMMA4_MODEL_NAME: str = "llama-3.3-70b-versatile"
-    GEMMA4_TIMEOUT_SECONDS: int = 120          # read timeout (model generation)
-    GEMMA4_CONNECT_TIMEOUT_SECONDS: int = 10   # fail fast when the endpoint is down
-    GEMMA4_MAX_RETRIES: int = 2                # retries on transient 5xx / connect errors
-    GEMMA4_MAX_TOKENS: int = 800               # 800 tokens covers most RAG answers; 2048 caused ~3× latency
-    GEMMA4_MAX_CONCURRENT: int = 5
-
-    # Groq-named settings (automatically synced to GEMMA4_* for backwards compatibility)
-    GROQ_BASE_URL: str = ""
-    GROQ_API_KEY: str = ""
-    GROQ_MODEL_NAME: str = ""
-    GROQ_TIMEOUT_SECONDS: int | None = None
-    GROQ_CONNECT_TIMEOUT_SECONDS: int | None = None
-    GROQ_MAX_RETRIES: int | None = None
-    GROQ_MAX_TOKENS: int | None = None
-    GROQ_MAX_CONCURRENT: int | None = None
+    GEMMA4_MODEL_NAME: str = ""
+    GEMMA4_TIMEOUT_SECONDS: int | None = None
+    GEMMA4_CONNECT_TIMEOUT_SECONDS: int | None = None
+    GEMMA4_MAX_RETRIES: int | None = None
+    GEMMA4_MAX_TOKENS: int | None = None
+    GEMMA4_MAX_CONCURRENT: int | None = None
     # Use the LLM to classify query intent (which stores to search). Off by
     # default: it adds a full Gemma round-trip on the critical path, and the
     # rule-based fallback is instant and recall-safe (searches all stores when
@@ -443,15 +443,18 @@ class Settings(BaseSettings):
         self.NEO4J_PASSWORD = self.NEO4J_PASSWORD.strip()
         self.NEO4J_DATABASE = self.NEO4J_DATABASE.strip()
 
-        # Automatic GROQ -> GEMMA4 sync
-        if self.GROQ_API_KEY and not self.GEMMA4_API_KEY:
-            self.GEMMA4_API_KEY = self.GROQ_API_KEY.strip()
-        if self.GROQ_BASE_URL and not self.GEMMA4_BASE_URL:
-            self.GEMMA4_BASE_URL = self.GROQ_BASE_URL.strip()
-        elif not self.GEMMA4_BASE_URL and self.GEMMA4_API_KEY and self.GEMMA4_API_KEY.startswith("gsk_"):
-            self.GEMMA4_BASE_URL = "https://api.groq.com/openai/v1"
-        if self.GROQ_MODEL_NAME:
-            self.GEMMA4_MODEL_NAME = self.GROQ_MODEL_NAME.strip()
+        # Fully synchronize GROQ and GEMMA4 settings
+        api_key = (self.GROQ_API_KEY or self.GEMMA4_API_KEY or "").strip()
+        base_url = (self.GROQ_BASE_URL or self.GEMMA4_BASE_URL or "https://api.groq.com/openai/v1").strip()
+        model_name = (self.GROQ_MODEL_NAME or self.GEMMA4_MODEL_NAME or "llama-3.3-70b-versatile").strip()
+
+        self.GROQ_API_KEY = api_key
+        self.GEMMA4_API_KEY = api_key
+        self.GROQ_BASE_URL = base_url
+        self.GEMMA4_BASE_URL = base_url
+        self.GROQ_MODEL_NAME = model_name
+        self.GEMMA4_MODEL_NAME = model_name
+
         if self.GROQ_TIMEOUT_SECONDS is not None:
             self.GEMMA4_TIMEOUT_SECONDS = self.GROQ_TIMEOUT_SECONDS
         if self.GROQ_CONNECT_TIMEOUT_SECONDS is not None:
