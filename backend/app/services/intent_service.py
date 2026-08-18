@@ -167,7 +167,7 @@ def classify_intent(query: str, query_embedding=None) -> dict:
         except Exception as exc:
             logger.warning("Semantic router failed (%s) — continuing to next tier", exc)
 
-    if not settings.INTENT_USE_LLM or not settings.GEMMA4_BASE_URL:
+    if not settings.INTENT_USE_LLM or not (settings.GROQ_BASE_URL or settings.GEMMA4_BASE_URL):
         return rule_intent
 
     try:
@@ -178,6 +178,7 @@ def classify_intent(query: str, query_embedding=None) -> dict:
             ],
             max_tokens=256,
             temperature=0.0,
+            model=settings.GROQ_ROUTING_MODEL,
         )
         parsed = _parse_intent(content)
         if parsed:

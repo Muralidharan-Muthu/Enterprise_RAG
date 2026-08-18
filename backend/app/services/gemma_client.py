@@ -67,9 +67,9 @@ def _build_headers() -> dict:
     return h
 
 
-def _build_payload(messages: list, max_tokens: int, temperature: float) -> dict:
+def _build_payload(messages: list, max_tokens: int, temperature: float, model: str | None = None) -> dict:
     return {
-        "model": _model_name(),
+        "model": model or _model_name(),
         "messages": messages,
         "max_tokens": max_tokens,
         "temperature": temperature,
@@ -113,16 +113,13 @@ def _get_client() -> httpx.Client:
 
 
 def _get_sync_semaphore() -> threading.Semaphore:
-    """Process-wide semaphore shared by every sync/thread caller (e.g. clause
-    enrichment's ThreadPoolExecutor), mirroring the async semaphore so at most
-    GEMMA4_MAX_CONCURRENT Gemma requests run in parallel regardless of which
-    path (async or sync/thread) issues them. Thread-safe double-checked init."""
+    """Process-wide semaphore shared by every sync/thread caller."""
     global _sync_semaphore
     if _sync_semaphore is None:
         with _sync_semaphore_lock:
             if _sync_semaphore is None:
-                limit = settings.GEMMA4_MAX_CONCURRENT
-                if limit is None or limit <= 0:
+                limit = settings.GROQ_MAX_CONCURRENT or settings.GEMMA4_MAX_CONCURRENT or 5
+                if limit <= 0:
                     limit = 1
                 _sync_semaphore = threading.Semaphore(limit)
     return _sync_semaphore
@@ -134,6 +131,7 @@ def chat(
     temperature: float = 0.1,
     retries: int | None = None,
     timeout: float | None = None,
+    model: str | None = None,
 ) -> str:
     """Sync LLM (Groq) call — retries transient connect errors and 429/5xx."""
     base = _base_url()
@@ -143,7 +141,7 @@ def chat(
     attempts = (_max_retries() if retries is None else retries) + 1
     url = f"{base}/chat/completions"
     headers = _build_headers()
-    payload = _build_payload(messages, max_tokens, temperature)
+    payload = _build_payload(messages, max_tokens, temperature, model=model)
     client = _get_client()
     last_exc: Exception | None = None
 
@@ -206,10 +204,10 @@ async def chat_async(
     max_tokens: int,
     temperature: float = 0.1,
     retries: int | None = None,
+    model: str | None = None,
 ) -> str:
     """Async LLM call — acquires a semaphore slot so at most
-    MAX_CONCURRENT requests run in parallel. Uses asyncio.sleep for
-    backoff so the event loop stays responsive during retries."""
+    MAX_CONCURRENT requests run in parallel."""
     base = _base_url()
     if not base:
         raise RuntimeError("LLM BASE_URL not configured")
@@ -217,7 +215,7 @@ async def chat_async(
     attempts = (_max_retries() if retries is None else retries) + 1
     url = f"{base}/chat/completions"
     headers = _build_headers()
-    payload = _build_payload(messages, max_tokens, temperature)
+    payload = _build_payload(messages, max_tokens, temperature, model=model)
     last_exc: Exception | None = None
 
     async with _get_semaphore():
@@ -253,6 +251,7 @@ async def chat_async_stream(
     messages: list[dict],
     max_tokens: int,
     temperature: float = 0.1,
+    model: str | None = None,
 ):
     """Async streaming LLM call — yields text delta strings via SSE."""
     base = _base_url()
@@ -261,7 +260,7 @@ async def chat_async_stream(
 
     url = f"{base}/chat/completions"
     headers = _build_headers()
-    payload = _build_payload(messages, max_tokens, temperature)
+    payload = _build_payload(messages, max_tokens, temperature, model=model)
     payload["stream"] = True
 
     async with _get_semaphore():

@@ -192,7 +192,8 @@ def _call_gemma(text: str, expected_count: int) -> str:
         retries=0,
         # Batched multi-clause prompts generate far more than a single answer;
         # keep the original 2x read budget so large batches don't spuriously time out.
-        timeout=settings.GEMMA4_TIMEOUT_SECONDS * 2,
+        timeout=(settings.GROQ_TIMEOUT_SECONDS or settings.GEMMA4_TIMEOUT_SECONDS or 60) * 2,
+        model=settings.GROQ_ENRICHMENT_MODEL,
     )
 
 

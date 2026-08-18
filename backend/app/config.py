@@ -22,10 +22,15 @@ class Settings(BaseSettings):
     SUPABASE_STORAGE_BUCKET: str = "rag-documents"
     DB_SSLMODE: str = "require"
 
-    # ── LLM (Groq API - Primary) ──────────────────────────────
+    # ── LLM (Groq API - Multi-Model Architecture) ────────────
     GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
     GROQ_API_KEY: str = ""
-    GROQ_MODEL_NAME: str = "openai/gpt-oss-120b"
+    GROQ_MODEL_NAME: str = "openai/gpt-oss-120b"              # Default fallback model
+    GROQ_SYNTHESIS_MODEL: str = "openai/gpt-oss-120b"         # Complex RAG reasoning & multi-document synthesis
+    GROQ_ROUTING_MODEL: str = "groq/compound-mini"            # Ultra-fast intent classification & query routing
+    GROQ_EXTRACTION_MODEL: str = "openai/gpt-oss-120b"        # Graph entity/relation extraction & Cypher
+    GROQ_ENRICHMENT_MODEL: str = "openai/gpt-oss-20b"         # Ingestion chunk & clause metadata enrichment
+    GROQ_CHAT_MODEL: str = "groq/compound-mini"               # Conversational & small talk chat
     GROQ_TIMEOUT_SECONDS: int = 120          # read timeout (model generation)
     GROQ_CONNECT_TIMEOUT_SECONDS: int = 10   # fail fast when endpoint is down
     GROQ_MAX_RETRIES: int = 2                # retries on transient 5xx / connect errors
@@ -446,6 +451,11 @@ class Settings(BaseSettings):
         self.GROQ_API_KEY = self.GROQ_API_KEY.strip()
         self.GROQ_BASE_URL = self.GROQ_BASE_URL.strip()
         self.GROQ_MODEL_NAME = self.GROQ_MODEL_NAME.strip()
+        self.GROQ_SYNTHESIS_MODEL = (self.GROQ_SYNTHESIS_MODEL or self.GROQ_MODEL_NAME).strip()
+        self.GROQ_ROUTING_MODEL = (self.GROQ_ROUTING_MODEL or self.GROQ_MODEL_NAME).strip()
+        self.GROQ_EXTRACTION_MODEL = (self.GROQ_EXTRACTION_MODEL or self.GROQ_MODEL_NAME).strip()
+        self.GROQ_ENRICHMENT_MODEL = (self.GROQ_ENRICHMENT_MODEL or self.GROQ_MODEL_NAME).strip()
+        self.GROQ_CHAT_MODEL = (self.GROQ_CHAT_MODEL or self.GROQ_MODEL_NAME).strip()
 
         # Synchronize GEMMA4 legacy aliases with GROQ settings
         self.GEMMA4_API_KEY = self.GROQ_API_KEY

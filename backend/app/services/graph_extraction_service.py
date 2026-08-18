@@ -75,7 +75,7 @@ def extract_graph_elements(
 
 
 def _call_gemma_graph(text: str, max_entities: int, max_relationships: int) -> dict | None:
-    """Call Gemma for graph extraction. Returns parsed dict or None on parse failure."""
+    """Call Groq LLM for graph extraction. Returns parsed dict or None on parse failure."""
     from app.services.gemma_client import chat
 
     system_prompt = _GRAPH_SYSTEM_PROMPT % (max_entities, max_relationships)
@@ -83,7 +83,12 @@ def _call_gemma_graph(text: str, max_entities: int, max_relationships: int) -> d
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": text[:6000]},
     ]
-    raw = chat(messages=messages, max_tokens=768, temperature=0.0)
+    raw = chat(
+        messages=messages,
+        max_tokens=768,
+        temperature=0.0,
+        model=settings.GROQ_EXTRACTION_MODEL,
+    )
     return _parse_graph_response(raw)
 
 

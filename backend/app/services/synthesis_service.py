@@ -249,7 +249,7 @@ def _content_for_chunk(chunk) -> str:
 
 
 async def _call_gemma_conversational(query: str) -> dict:
-    """Call Gemma for greetings / off-topic queries without any document context."""
+    """Call Groq LLM for greetings / off-topic queries without any document context."""
     raw = await gemma_client.chat_async(
         messages=[
             {"role": "system", "content": _CONVERSATIONAL_SYSTEM_PROMPT},
@@ -257,6 +257,7 @@ async def _call_gemma_conversational(query: str) -> dict:
         ],
         max_tokens=256,
         temperature=0.7,
+        model=settings.GROQ_CHAT_MODEL,
     )
     answer = raw.strip() if isinstance(raw, str) else str(raw)
     # Strip JSON if model still wraps response
@@ -279,8 +280,9 @@ async def _call_gemma(query: str, context_blocks: str, retrieval_breakdown: dict
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        max_tokens=settings.GEMMA4_MAX_TOKENS,
+        max_tokens=settings.GROQ_MAX_TOKENS or settings.GEMMA4_MAX_TOKENS or 800,
         temperature=0.1,
+        model=settings.GROQ_SYNTHESIS_MODEL,
     )
     return _parse_answer(raw, retrieval_breakdown=retrieval_breakdown)
 

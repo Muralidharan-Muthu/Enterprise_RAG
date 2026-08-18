@@ -254,6 +254,7 @@ def _summarize_community(
             messages=[{"role": "user", "content": prompt}],
             max_tokens=200,
             temperature=0.0,
+            model=settings.GROQ_EXTRACTION_MODEL,
         )
         import json
         import re
