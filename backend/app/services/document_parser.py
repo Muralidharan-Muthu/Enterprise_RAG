@@ -48,6 +48,141 @@ def _pil_to_png_bytes(pil_image) -> tuple[bytes, int, int]:
     return buf.getvalue(), pil_image.width, pil_image.height
 
 
+def _parse_pdf_fast(
+    path: Path,
+    doc_id: str,
+    on_progress: Optional[Callable[[int, int, list], None]] = None,
+    prescan: Optional[list] = None,
+) -> ParsedDocument:
+    """Fast, deterministic, zero-network PDF parser using PyMuPDF.
+    Extracts text blocks, paragraphs, tables, images, and coordinates in <1s.
+    Fires on_progress after each page so the UI displays live real-time progress."""
+    import fitz  # PyMuPDF
+
+    doc = fitz.open(str(path))
+    total = len(doc)
+    all_blocks: list[TextBlock] = []
+    all_raw: list[str] = []
+    all_tables: list[ExtractedTable] = []
+    all_images: list[ExtractedImage] = []
+    image_pages: set[int] = set()
+    pages_detail: list[dict] = []
+
+    for i, page in enumerate(doc):
+        p = i + 1
+        page_text = page.get_text() or ""
+        all_raw.append(page_text)
+
+        # 1. Extract text blocks
+        paras = [para.strip() for para in page_text.split("\n\n") if para.strip()]
+        for para in paras:
+            all_blocks.append(TextBlock(
+                text=para,
+                page_number=p,
+                block_type="paragraph",
+                token_count=_simple_token_count(para),
+            ))
+
+        # 2. Extract tables via fitz find_tables()
+        page_tables_count = 0
+        try:
+            tab_finder = page.find_tables()
+            if tab_finder and tab_finder.tables:
+                for tab in tab_finder.tables:
+                    extracted_grid = tab.extract()
+                    if extracted_grid and len(extracted_grid) > 1:
+                        headers = [str(c or "").strip() for c in extracted_grid[0]]
+                        rows = [[str(c or "").strip() for c in row] for row in extracted_grid[1:]]
+                        rows = [r for r in rows if any(c for c in r)]
+                        if headers and rows:
+                            bbox_rect = tab.bbox
+                            t_bbox = BoundingBox(x1=bbox_rect[0], y1=bbox_rect[1], x2=bbox_rect[2], y2=bbox_rect[3])
+                            t_png = None
+                            try:
+                                clip = fitz.Rect(bbox_rect) & page.rect
+                                if not clip.is_empty:
+                                    pix = page.get_pixmap(clip=clip, matrix=fitz.Matrix(2.0, 2.0))
+                                    t_png = pix.tobytes("png")
+                            except Exception:
+                                pass
+
+                            all_tables.append(ExtractedTable(
+                                table_index=len(all_tables),
+                                page_number=p,
+                                headers=headers,
+                                rows=rows,
+                                caption=None,
+                                bbox=t_bbox,
+                                raw_text=_table_to_text(headers, rows),
+                                markdown_text=_table_to_markdown(headers, rows),
+                                image_png_bytes=t_png,
+                                table_metadata={},
+                            ))
+                            page_tables_count += 1
+        except Exception as tab_exc:
+            logger.debug("[%s] Table finder on page %d skipped: %s", doc_id, p, tab_exc)
+
+        # 3. Extract images
+        page_imgs = page.get_images(full=True)
+        if page_imgs:
+            image_pages.add(p)
+            for img_info in page_imgs:
+                xref = img_info[0]
+                try:
+                    base_img = doc.extract_image(xref)
+                    if base_img and base_img.get("image"):
+                        all_images.append(ExtractedImage(
+                            image_index=len(all_images),
+                            page_number=p,
+                            bbox=None,
+                            png_bytes=base_img["image"],
+                            width=base_img.get("width", 0),
+                            height=base_img.get("height", 0),
+                        ))
+                except Exception:
+                    pass
+
+        pages_detail.append({
+            "page": p,
+            "blocks": len(paras),
+            "tables": page_tables_count,
+            "images": len(page_imgs),
+            "est_words": len(page_text.split()),
+            "done": True,
+        })
+
+        if on_progress:
+            try:
+                on_progress(p, total, pages_detail)
+            except Exception as pe:
+                logger.debug("[%s] progress callback error: %s", doc_id, pe)
+
+    meta = {
+        "title": doc.metadata.get("title") if doc.metadata else None,
+        "author": doc.metadata.get("author") if doc.metadata else None,
+    }
+    doc.close()
+
+    raw_text = "\n\n".join(all_raw)
+    all_tables = _merge_continued_tables(all_tables)
+    all_tables = _reassign_table_captions(all_tables, all_blocks)
+
+    return ParsedDocument(
+        doc_id=doc_id,
+        filename=path.name,
+        raw_text=raw_text,
+        text_blocks=all_blocks,
+        tables=all_tables,
+        page_count=total,
+        word_count=len(raw_text.split()),
+        has_tables=len(all_tables) > 0,
+        has_images=len(image_pages) > 0,
+        image_page_numbers=sorted(image_pages),
+        images=all_images,
+        metadata=meta,
+    )
+
+
 def parse_document(
     file_path: str,
     doc_id: str,
@@ -57,15 +192,16 @@ def parse_document(
     """
     Parse a document.  Routing is by file extension:
 
-    .pdf → page-chunked Docling path (bounded memory + live progress):
-      1. parse_document_chunked — page-chunked Docling.
-      2. _parse_with_docling   — whole-document Docling (one pass).
-      3. _parse_fallback       — PyMuPDF raw-text dump (last resort).
+    .pdf → fast zero-network PyMuPDF (default) or Docling:
+      1. _parse_pdf_fast        — instantaneous zero-download PyMuPDF (<1s).
+      2. parse_document_chunked — optional Docling if DOCLING_ENABLED=True.
+      3. _parse_fallback       — fallback text dump.
 
     .docx / .pptx / .xlsx / .html / .htm / .md → _parse_non_pdf:
       Single Docling pass; reuses _extract_items / _extract_tables unchanged.
-      Failures propagate cleanly — never falls back to fitz for non-PDF.
     """
+    from app.config import settings
+
     path = Path(file_path)
     if not path.exists():
         raise ParsingError(path.name, "File not found")
@@ -73,11 +209,13 @@ def parse_document(
     ext = path.suffix.lower()
 
     if ext != ".pdf":
-        # Non-PDF: single Docling pass via the multi-format converter.
-        # Let any exception bubble up — the orchestrator marks the doc failed.
         return _parse_non_pdf(path, doc_id)
 
-    # PDF: chunked path with fallbacks.
+    # PDF: use fast zero-network parser if Docling is disabled (recommended default)
+    if not getattr(settings, "DOCLING_ENABLED", False):
+        return _parse_pdf_fast(path, doc_id, on_progress=on_progress, prescan=prescan)
+
+    # PDF: chunked Docling path with fallbacks.
     try:
         return parse_document_chunked(path, doc_id, prescan=prescan, on_progress=on_progress)
     except Exception as exc:

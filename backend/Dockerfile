@@ -20,6 +20,9 @@ RUN pip install --no-cache-dir torch torchvision --index-url https://download.py
 
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Pre-bake Docling models into the Docker image
+RUN python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='ds4sd/docling-models', revision='v2.1.0', local_dir='/app/docling_models')"
+
 COPY . .
 
 EXPOSE 8000

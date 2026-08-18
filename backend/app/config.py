@@ -212,6 +212,14 @@ class Settings(BaseSettings):
     PREFILTER_LOWINFO_MAX_COLORS: int = 16     # ... and few colors
     PREFILTER_TEXT_MIN_OCR_CHARS: int = 12     # OCR_ONLY: real text, no visual structure
 
+    # ── Document Parsing Engine ───────────────────────────────
+    # Uses Docling with local offline model artifacts stored in backend/docling_models/
+    DOCLING_ENABLED: bool = True
+    DOCLING_DO_OCR: bool = False
+    DOCLING_DO_TABLE_STRUCTURE: bool = True
+    DOCLING_IMAGES_SCALE: float = 2.0
+    XLSX_MAX_ROWS_PER_SHEET: int = 10000
+
     # ── Ingestion safety & performance (A+B) ──────────────────
     # Real BGE tokenizer for chunk token counts instead of whitespace word-count.
     # False restores the old len(text.split()) approximation. When True, chunkers

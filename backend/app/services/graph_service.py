@@ -74,9 +74,22 @@ def _get_driver():
         return None
     try:
         from neo4j import GraphDatabase
+        # Aura-tailored connection pool options:
+        # 1. max_connection_lifetime: Recycles connections before Aura's load balancer drops idle TCP sockets (120s).
+        # 2. liveness_check_timeout: Proactively tests socket health if idle > 15s before running queries.
+        # 3. keep_alive: Enables TCP keep-alive probes to prevent intermediate TLS proxy timeouts.
+        # 4. Suppress benign neo4j.io EOF disconnect logs on idle connection drop.
+        logging.getLogger("neo4j.io").setLevel(logging.CRITICAL)
+        logging.getLogger("neo4j.pool").setLevel(logging.WARNING)
+
         _driver = GraphDatabase.driver(
             settings.NEO4J_URI,
             auth=(settings.NEO4J_USERNAME, settings.NEO4J_PASSWORD),
+            max_connection_lifetime=120,
+            liveness_check_timeout=15,
+            keep_alive=True,
+            max_connection_pool_size=50,
+            connection_acquisition_timeout=30.0,
         )
         return _driver
     except Exception as exc:
