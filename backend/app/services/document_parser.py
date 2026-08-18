@@ -112,17 +112,15 @@ def _make_converter(do_ocr: Optional[bool] = None):
     from docling.datamodel.base_models import InputFormat
     from docling.datamodel.pipeline_options import PdfPipelineOptions
 
-    # Store models locally — bypasses HF hub's symlink-based cache which
-    # requires SeCreateSymbolicLinkPrivilege (WinError 1314 on Windows
-    # without Developer Mode). Local path uses plain file copies instead.
     artifacts_dir = Path(__file__).resolve().parent.parent.parent / "docling_models"
-    artifacts_dir.mkdir(exist_ok=True)
+    # Only use artifacts_path if it exists and contains actual model weights
+    local_artifacts = artifacts_dir if (artifacts_dir.exists() and any(artifacts_dir.iterdir())) else None
 
     from app.config import settings
     pipeline_options = PdfPipelineOptions(
         do_ocr=settings.DOCLING_DO_OCR if do_ocr is None else do_ocr,
         do_table_structure=settings.DOCLING_DO_TABLE_STRUCTURE,
-        artifacts_path=artifacts_dir,
+        artifacts_path=local_artifacts,
         generate_picture_images=True,
         generate_table_images=True,
         images_scale=settings.DOCLING_IMAGES_SCALE,
@@ -134,26 +132,19 @@ def _make_converter(do_ocr: Optional[bool] = None):
 
 def _make_converter_multi():
     """Build a Docling DocumentConverter that handles PDF (with full pipeline
-    options) plus DOCX / PPTX / XLSX / HTML / MD using Docling defaults.
-
-    PDF keeps all existing options (artifacts dir, OCR, table-structure,
-    image generation, scale) exactly as in _make_converter().  The other
-    formats are registered with Docling's default pipeline so no extra
-    configuration is needed — passing only the PDF format_options is
-    sufficient; Docling accepts the remaining InputFormats without explicit
-    options when they are listed in allowed_formats."""
+    options) plus DOCX / PPTX / XLSX / HTML / MD using Docling defaults."""
     from docling.document_converter import DocumentConverter, PdfFormatOption
     from docling.datamodel.base_models import InputFormat
     from docling.datamodel.pipeline_options import PdfPipelineOptions
 
     artifacts_dir = Path(__file__).resolve().parent.parent.parent / "docling_models"
-    artifacts_dir.mkdir(exist_ok=True)
+    local_artifacts = artifacts_dir if (artifacts_dir.exists() and any(artifacts_dir.iterdir())) else None
 
     from app.config import settings
     pipeline_options = PdfPipelineOptions(
         do_ocr=settings.DOCLING_DO_OCR,
         do_table_structure=settings.DOCLING_DO_TABLE_STRUCTURE,
-        artifacts_path=artifacts_dir,
+        artifacts_path=local_artifacts,
         generate_picture_images=True,
         generate_table_images=True,
         images_scale=settings.DOCLING_IMAGES_SCALE,
@@ -950,9 +941,37 @@ def parse_document_chunked(
                     if e:
                         e["images"] += 1
             except Exception as ce:
-                logger.warning("[%s] chunk pages %d-%d failed (skipped): %s", doc_id, start + 1, end, ce)
-                for p in range(start + 1, end + 1):
-                    real_by_page[p] = {"page": p, "blocks": 0, "tables": 0, "images": 0, "est_words": 0, "failed": True}
+                logger.warning("[%s] chunk pages %d-%d failed with Docling (%s) — falling back to PyMuPDF extraction", doc_id, start + 1, end, ce)
+                try:
+                    with fitz.open(tmp.name) as chunk_pdf:
+                        for chunk_idx, page in enumerate(chunk_pdf):
+                            p = start + 1 + chunk_idx
+                            page_text = page.get_text() or ""
+                            page_words = len(page_text.split())
+                            page_paras = [para.strip() for para in page_text.split("\n\n") if para.strip()]
+                            page_imgs = len(page.get_images(full=True))
+                            if page_imgs > 0:
+                                image_pages.add(p)
+                            real_by_page[p] = {
+                                "page": p,
+                                "blocks": len(page_paras),
+                                "tables": 0,
+                                "images": page_imgs,
+                                "est_words": page_words,
+                                "done": True,
+                            }
+                            all_raw.append(page_text)
+                            for para in page_paras:
+                                all_blocks.append(TextBlock(
+                                    text=para,
+                                    page_number=p,
+                                    block_type="paragraph",
+                                    token_count=_simple_token_count(para),
+                                ))
+                except Exception as fitz_err:
+                    logger.warning("[%s] PyMuPDF fallback for chunk %d-%d also failed: %s", doc_id, start + 1, end, fitz_err)
+                    for p in range(start + 1, end + 1):
+                        real_by_page[p] = {"page": p, "blocks": 0, "tables": 0, "images": 0, "est_words": 0, "failed": True}
             finally:
                 try:
                     os.unlink(tmp.name)
@@ -990,29 +1009,46 @@ def parse_document_chunked(
 
 
 def _parse_fallback(path: Path, doc_id: str) -> ParsedDocument:
-    """Minimal fallback using PyMuPDF if Docling fails."""
+    """Accurate PyMuPDF fallback parser."""
     try:
         import fitz  # PyMuPDF
         pdf = fitz.open(str(path))
-        pages_text = [page.get_text() for page in pdf]
-        raw_text = "\n\n".join(pages_text)
-        pdf.close()
-        page_count = len(pages_text)
-    except Exception:
-        raw_text = ""
-        page_count = 0
+        blocks = []
+        raw_parts = []
+        image_pages = set()
+        page_count = len(pdf)
 
-    blocks = [
-        TextBlock(
-            text=para.strip(),
-            page_number=i + 1,
-            block_type="paragraph",
-            token_count=_simple_token_count(para.strip()),
-        )
-        for i, page_text in enumerate(raw_text.split("\n\n"))
-        for para in [page_text.strip()]
-        if para.strip()
-    ]
+        for i, page in enumerate(pdf):
+            page_num = i + 1
+            text = page.get_text() or ""
+            if text:
+                raw_parts.append(text)
+                paras = [p.strip() for p in text.split("\n\n") if p.strip()]
+                for para in paras:
+                    blocks.append(
+                        TextBlock(
+                            text=para,
+                            page_number=page_num,
+                            block_type="paragraph",
+                            token_count=_simple_token_count(para),
+                        )
+                    )
+            if page.get_images(full=True):
+                image_pages.add(page_num)
+
+        meta = {
+            "title": pdf.metadata.get("title") if pdf.metadata else None,
+            "author": pdf.metadata.get("author") if pdf.metadata else None,
+        }
+        pdf.close()
+        raw_text = "\n\n".join(raw_parts)
+    except Exception as e:
+        logger.warning("[%s] PyMuPDF fallback failed: %s", doc_id, e)
+        raw_text = ""
+        blocks = []
+        page_count = 0
+        image_pages = set()
+        meta = {}
 
     return ParsedDocument(
         doc_id=doc_id,
@@ -1023,8 +1059,9 @@ def _parse_fallback(path: Path, doc_id: str) -> ParsedDocument:
         page_count=page_count,
         word_count=len(raw_text.split()),
         has_tables=False,
-        has_images=False,
-        metadata={},
+        has_images=len(image_pages) > 0,
+        image_page_numbers=sorted(image_pages),
+        metadata=meta,
     )
 
 
