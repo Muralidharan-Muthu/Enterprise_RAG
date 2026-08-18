@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # ── LLM (Groq API - Primary) ──────────────────────────────
     GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
     GROQ_API_KEY: str = ""
-    GROQ_MODEL_NAME: str = "llama-3.3-70b-versatile"
+    GROQ_MODEL_NAME: str = "openai/gpt-oss-120b"
     GROQ_TIMEOUT_SECONDS: int = 120          # read timeout (model generation)
     GROQ_CONNECT_TIMEOUT_SECONDS: int = 10   # fail fast when endpoint is down
     GROQ_MAX_RETRIES: int = 2                # retries on transient 5xx / connect errors
@@ -446,6 +446,16 @@ class Settings(BaseSettings):
         self.GROQ_API_KEY = self.GROQ_API_KEY.strip()
         self.GROQ_BASE_URL = self.GROQ_BASE_URL.strip()
         self.GROQ_MODEL_NAME = self.GROQ_MODEL_NAME.strip()
+
+        # Synchronize GEMMA4 legacy aliases with GROQ settings
+        self.GEMMA4_API_KEY = self.GROQ_API_KEY
+        self.GEMMA4_BASE_URL = self.GROQ_BASE_URL
+        self.GEMMA4_MODEL_NAME = self.GROQ_MODEL_NAME
+        self.GEMMA4_TIMEOUT_SECONDS = self.GROQ_TIMEOUT_SECONDS
+        self.GEMMA4_CONNECT_TIMEOUT_SECONDS = self.GROQ_CONNECT_TIMEOUT_SECONDS
+        self.GEMMA4_MAX_RETRIES = self.GROQ_MAX_RETRIES
+        self.GEMMA4_MAX_TOKENS = self.GROQ_MAX_TOKENS
+        self.GEMMA4_MAX_CONCURRENT = self.GROQ_MAX_CONCURRENT
 
     @property
     def max_upload_bytes(self) -> int:
