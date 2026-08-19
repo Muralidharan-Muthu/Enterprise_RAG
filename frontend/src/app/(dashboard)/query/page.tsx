@@ -851,18 +851,18 @@ function RecentChatsSidebar({
   };
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden w-64">
+    <div className="h-full flex flex-col bg-white dark:bg-[#202024] border border-slate-200 dark:border-white/[0.08] rounded-2xl overflow-hidden w-64 shadow-xs dark:shadow-xl transition-colors">
       {/* Header */}
-      <div className="flex-shrink-0 px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center gap-2">
-        <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">Recent Chats</span>
+      <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 dark:border-white/[0.08] flex items-center gap-2">
+        <span className="text-sm font-semibold text-slate-800 dark:text-gray-100">Recent Chats</span>
       </div>
 
       {/* New chat button */}
-      <div className="flex-shrink-0 px-3 py-2 border-b border-gray-100 dark:border-gray-800/60">
+      <div className="flex-shrink-0 px-3 py-2 border-b border-slate-100 dark:border-white/[0.06]">
         <button
           type="button"
           onClick={onNewChat}
-          className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-all"
+          className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-all"
         >
           <Plus className="h-3.5 w-3.5" />
           New Chat
@@ -889,10 +889,10 @@ function RecentChatsSidebar({
               type="button"
               onClick={() => onSessionClick(session.id)}
               className={cn(
-                "w-full text-left px-3 py-2.5 rounded-lg transition-all group flex items-start gap-2",
+                "w-full text-left px-3 py-2.5 rounded-xl transition-all group flex items-start gap-2",
                 session.id === currentSessionId
-                  ? "bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20"
-                  : "hover:bg-gray-100 dark:hover:bg-gray-800 border border-transparent"
+                  ? "bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-200 dark:border-indigo-500/30"
+                  : "hover:bg-slate-100 dark:hover:bg-white/[0.04] border border-transparent"
               )}
             >
               <div className="flex-1 min-w-0">
@@ -900,8 +900,8 @@ function RecentChatsSidebar({
                   className={cn(
                     "text-xs font-medium truncate leading-relaxed",
                     session.id === currentSessionId
-                      ? "text-blue-700 dark:text-blue-300"
-                      : "text-gray-700 dark:text-gray-300"
+                      ? "text-indigo-700 dark:text-indigo-300 font-semibold"
+                      : "text-slate-700 dark:text-slate-300"
                   )}
                 >
                   {session.title}
@@ -2080,10 +2080,10 @@ function DocumentChat({
 
   if (isSwitchingSession) {
     return (
-      <div className="h-full flex items-center justify-center bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800">
+      <div className="h-full flex items-center justify-center bg-white dark:bg-[#202024] rounded-2xl border border-slate-200 dark:border-white/[0.08]">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
-          <p className="text-sm text-gray-500 dark:text-gray-400">Loading chat…</p>
+          <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
+          <p className="text-sm text-slate-500 dark:text-zinc-400">Loading chat…</p>
         </div>
       </div>
     );
@@ -2091,9 +2091,9 @@ function DocumentChat({
 
   return (
     <div className="h-full flex min-w-0 gap-3">
-    <div className="min-w-0 flex-1 flex flex-col bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-xl overflow-hidden">
+    <div className="min-w-0 flex-1 flex flex-col bg-white dark:bg-[#202024] rounded-2xl border border-slate-200 dark:border-white/[0.08] shadow-sm dark:shadow-2xl overflow-hidden transition-colors">
       {/* ── Header ── */}
-      <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm px-5 py-3 flex items-center justify-between gap-4">
+      <div className="flex-shrink-0 border-b border-slate-200 dark:border-white/[0.08] bg-white/90 dark:bg-[#202024]/90 backdrop-blur-md px-5 py-3.5 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2.5">
           {/* Sidebar toggle */}
           <button
@@ -2526,7 +2526,7 @@ function DocumentChat({
       )}
 
       {/* ── Input ── */}
-      <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm px-5 py-4">
+      <div className="flex-shrink-0 border-t border-slate-200 dark:border-white/[0.08] bg-white/95 dark:bg-[#202024]/95 backdrop-blur-md px-5 py-4">
         <form onSubmit={handleSubmit} className="flex items-end gap-3">
           <textarea
             ref={textareaRef}
@@ -2536,7 +2536,7 @@ function DocumentChat({
             placeholder="Ask about your documents… (Enter to send, Shift+Enter for new line)"
             rows={1}
             disabled={isPending}
-            className="flex-1 resize-none text-sm bg-white dark:bg-gray-800/50 border-2 border-blue-400 dark:border-blue-500/40 shadow-sm rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500/40 focus:border-blue-600 dark:focus:border-blue-400 outline-none disabled:opacity-50 overflow-y-auto leading-relaxed text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all"
+            className="flex-1 resize-none text-sm bg-slate-50/80 dark:bg-[#18181b]/80 border border-slate-300 dark:border-white/[0.12] shadow-xs rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 outline-none disabled:opacity-50 overflow-y-auto leading-relaxed text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 transition-all"
             style={{ minHeight: "46px", maxHeight: "128px" }}
           />
           {isPending ? (
@@ -2544,7 +2544,7 @@ function DocumentChat({
               type="button"
               onClick={handleStop}
               title="Stop generating"
-              className="flex-shrink-0 w-11 h-11 bg-gray-700 text-white rounded-xl hover:bg-gray-800 flex items-center justify-center transition-all shadow-lg"
+              className="flex-shrink-0 w-11 h-11 bg-slate-700 text-white rounded-xl hover:bg-slate-800 flex items-center justify-center transition-all shadow-md"
             >
               <Square className="h-4 w-4 fill-current" />
             </button>
@@ -2552,7 +2552,7 @@ function DocumentChat({
             <button
               type="submit"
               disabled={!input.trim()}
-              className="flex-shrink-0 w-11 h-11 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-all shadow-lg shadow-blue-500/20 disabled:shadow-none"
+              className="flex-shrink-0 w-11 h-11 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl hover:from-indigo-500 hover:to-violet-500 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-all shadow-md shadow-indigo-500/20 disabled:shadow-none"
             >
               <Send className="h-4 w-4" />
             </button>

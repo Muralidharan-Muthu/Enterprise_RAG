@@ -113,4 +113,5 @@ echo -e "${CYAN}============================================================${NC
 echo -e "${YELLOW}Press Ctrl+C or run ./stop.sh to stop all services.${NC}\n"
 
 cd "$SCRIPT_DIR/frontend"
+rm -rf .next 2>/dev/null || true
 npm run dev

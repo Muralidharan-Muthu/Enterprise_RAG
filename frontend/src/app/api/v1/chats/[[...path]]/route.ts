@@ -12,10 +12,14 @@ async function proxy(req: NextRequest, pathSegments?: string[]) {
     body = await req.text();
   }
 
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const auth = req.headers.get("authorization");
+  if (auth) headers["authorization"] = auth;
+
   try {
     const upstream = await fetch(url, {
       method: req.method,
-      headers: { "Content-Type": "application/json" },
+      headers,
       body,
       // See the ingest proxy for why: Next's server-side fetch() defaults to
       // caching GET requests, which would stale-lock chat history polling.

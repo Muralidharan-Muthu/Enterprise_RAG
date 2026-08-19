@@ -46,49 +46,49 @@ const STAGE_ESTIMATES: Record<string, number> = {
 interface StageColor { border: string; text: string; fill: string; base: string; ring: string; pill: string; }
 const STAGE_COLORS: Record<string, StageColor> = {
   queued: {
-    border: "border-slate-200 dark:border-slate-700", text: "text-slate-600 dark:text-slate-300",
-    fill: "bg-slate-100 dark:bg-slate-800", base: "bg-slate-50 dark:bg-slate-900/40",
-    ring: "ring-slate-400 dark:ring-slate-600", pill: "bg-slate-200/60 dark:bg-slate-100/10",
+    border: "border-slate-200 dark:border-white/[0.08]", text: "text-slate-600 dark:text-zinc-300",
+    fill: "bg-slate-100 dark:bg-zinc-800/80", base: "bg-slate-50 dark:bg-[#18181b]/60",
+    ring: "ring-slate-400 dark:ring-zinc-600", pill: "bg-slate-200/60 dark:bg-white/[0.08]",
   },
   parsing: {
-    border: "border-emerald-200 dark:border-emerald-900", text: "text-emerald-700 dark:text-emerald-300",
-    fill: "bg-emerald-100 dark:bg-emerald-950", base: "bg-emerald-50 dark:bg-emerald-950/40",
-    ring: "ring-emerald-400 dark:ring-emerald-700", pill: "bg-emerald-200/50 dark:bg-emerald-400/15",
+    border: "border-emerald-200 dark:border-emerald-500/30", text: "text-emerald-700 dark:text-emerald-300",
+    fill: "bg-emerald-100/70 dark:bg-emerald-950/60", base: "bg-emerald-50/40 dark:bg-emerald-950/20",
+    ring: "ring-emerald-400 dark:ring-emerald-600", pill: "bg-emerald-200/50 dark:bg-emerald-500/20",
   },
   images: {
-    border: "border-indigo-200 dark:border-indigo-900", text: "text-indigo-700 dark:text-indigo-300",
-    fill: "bg-indigo-100 dark:bg-indigo-950", base: "bg-indigo-50 dark:bg-indigo-950/40",
-    ring: "ring-indigo-400 dark:ring-indigo-700", pill: "bg-indigo-200/50 dark:bg-indigo-400/15",
+    border: "border-indigo-200 dark:border-indigo-500/30", text: "text-indigo-700 dark:text-indigo-300",
+    fill: "bg-indigo-100/70 dark:bg-indigo-950/60", base: "bg-indigo-50/40 dark:bg-indigo-950/20",
+    ring: "ring-indigo-400 dark:ring-indigo-600", pill: "bg-indigo-200/50 dark:bg-indigo-500/20",
   },
   routing: {
-    border: "border-amber-200 dark:border-amber-900", text: "text-amber-700 dark:text-amber-300",
-    fill: "bg-amber-100 dark:bg-amber-950", base: "bg-amber-50 dark:bg-amber-950/40",
-    ring: "ring-amber-400 dark:ring-amber-700", pill: "bg-amber-200/50 dark:bg-amber-400/15",
+    border: "border-amber-200 dark:border-amber-500/30", text: "text-amber-700 dark:text-amber-300",
+    fill: "bg-amber-100/70 dark:bg-amber-950/60", base: "bg-amber-50/40 dark:bg-amber-950/20",
+    ring: "ring-amber-400 dark:ring-amber-600", pill: "bg-amber-200/50 dark:bg-amber-500/20",
   },
   chunking: {
-    border: "border-purple-200 dark:border-purple-900", text: "text-purple-700 dark:text-purple-300",
-    fill: "bg-purple-100 dark:bg-purple-950", base: "bg-purple-50 dark:bg-purple-950/40",
-    ring: "ring-purple-400 dark:ring-purple-700", pill: "bg-purple-200/50 dark:bg-purple-400/15",
+    border: "border-violet-200 dark:border-violet-500/30", text: "text-violet-700 dark:text-violet-300",
+    fill: "bg-violet-100/70 dark:bg-violet-950/60", base: "bg-violet-50/40 dark:bg-violet-950/20",
+    ring: "ring-violet-400 dark:ring-violet-600", pill: "bg-violet-200/50 dark:bg-violet-500/20",
   },
   embedding: {
-    border: "border-cyan-200 dark:border-cyan-900", text: "text-cyan-700 dark:text-cyan-300",
-    fill: "bg-cyan-100 dark:bg-cyan-950", base: "bg-cyan-50 dark:bg-cyan-950/40",
-    ring: "ring-cyan-400 dark:ring-cyan-700", pill: "bg-cyan-200/50 dark:bg-cyan-400/15",
+    border: "border-cyan-200 dark:border-cyan-500/30", text: "text-cyan-700 dark:text-cyan-300",
+    fill: "bg-cyan-100/70 dark:bg-cyan-950/60", base: "bg-cyan-50/40 dark:bg-cyan-950/20",
+    ring: "ring-cyan-400 dark:ring-cyan-600", pill: "bg-cyan-200/50 dark:bg-cyan-500/20",
   },
   storing: {
-    border: "border-blue-200 dark:border-blue-900", text: "text-blue-700 dark:text-blue-300",
-    fill: "bg-blue-100 dark:bg-blue-950", base: "bg-blue-50 dark:bg-blue-950/40",
-    ring: "ring-blue-400 dark:ring-blue-700", pill: "bg-blue-200/50 dark:bg-blue-400/15",
+    border: "border-teal-200 dark:border-teal-500/30", text: "text-teal-700 dark:text-teal-300",
+    fill: "bg-teal-100/70 dark:bg-teal-950/60", base: "bg-teal-50/40 dark:bg-teal-950/20",
+    ring: "ring-teal-400 dark:ring-teal-600", pill: "bg-teal-200/50 dark:bg-teal-500/20",
   },
   graph: {
-    border: "border-fuchsia-200 dark:border-fuchsia-900", text: "text-fuchsia-700 dark:text-fuchsia-300",
-    fill: "bg-fuchsia-100 dark:bg-fuchsia-950", base: "bg-fuchsia-50 dark:bg-fuchsia-950/40",
-    ring: "ring-fuchsia-400 dark:ring-fuchsia-700", pill: "bg-fuchsia-200/50 dark:bg-fuchsia-400/15",
+    border: "border-purple-200 dark:border-purple-500/30", text: "text-purple-700 dark:text-purple-300",
+    fill: "bg-purple-100/70 dark:bg-purple-950/60", base: "bg-purple-50/40 dark:bg-purple-950/20",
+    ring: "ring-purple-400 dark:ring-purple-600", pill: "bg-purple-200/50 dark:bg-purple-500/20",
   },
   done: {
-    border: "border-green-200 dark:border-green-900", text: "text-green-700 dark:text-green-300",
-    fill: "bg-green-100 dark:bg-green-950", base: "bg-green-50 dark:bg-green-950/40",
-    ring: "ring-green-400 dark:ring-green-700", pill: "bg-green-200/50 dark:bg-green-400/15",
+    border: "border-emerald-200 dark:border-emerald-500/30", text: "text-emerald-700 dark:text-emerald-300",
+    fill: "bg-emerald-100/70 dark:bg-emerald-950/60", base: "bg-emerald-50/40 dark:bg-emerald-950/20",
+    ring: "ring-emerald-400 dark:ring-emerald-600", pill: "bg-emerald-200/50 dark:bg-emerald-500/20",
   },
 };
 
@@ -177,9 +177,9 @@ export default function PipelineDetailPage() {
       </div>
 
       {/* ── Documents ─────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
-        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+      <div className="bg-white dark:bg-[#202024]/80 backdrop-blur-xl rounded-2xl border border-slate-200 dark:border-white/[0.08] shadow-sm dark:shadow-2xl overflow-hidden transition-colors">
+        <div className="px-6 py-4 border-b border-slate-200/80 dark:border-white/[0.07] bg-slate-50/70 dark:bg-white/[0.02]">
+          <h2 className="text-base font-semibold text-slate-900 dark:text-zinc-100">
             Documents ({run.documents.length})
           </h2>
         </div>
@@ -671,7 +671,7 @@ function StageFlow({ doc }: { doc: PipelineDocumentDetail }) {
       {/* ── Right: Detail panel ── */}
       {selectedStage && (
         <div className="flex-1 min-w-0 self-stretch">
-          <div className="h-full rounded-xl border bg-white dark:bg-gray-900 shadow-sm overflow-hidden flex flex-col">
+          <div className="h-full rounded-2xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#18181b] shadow-sm dark:shadow-xl overflow-hidden flex flex-col transition-colors">
             <StageDetailContent
               stage={selectedStage}
               doc={doc}
@@ -709,10 +709,10 @@ function StageDetailContent({
   const isParsing = doc.current_stage === "parsing" && !isCompleted && doc.doc_status !== "failed";
 
   const PanelHeader = ({ label }: { label: string }) => (
-    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
-      <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">{label}</p>
+    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200/80 dark:border-white/[0.08] bg-slate-50/70 dark:bg-[#18181b]">
+      <p className="text-xs font-semibold text-slate-700 dark:text-zinc-300 uppercase tracking-wider">{label}</p>
       {timing != null && (
-        <span className="text-xs text-gray-400 tabular-nums font-medium">{fmtTime(timing)}</span>
+        <span className="text-xs text-slate-400 dark:text-zinc-500 tabular-nums font-medium">{fmtTime(timing)}</span>
       )}
     </div>
   );
@@ -896,9 +896,9 @@ function Pill({
 
 function StatCard({ label, value, color }: { label: string; value: number | string; color: string }) {
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm px-4 py-3">
-      <p className="text-xs text-gray-400 dark:text-gray-500 font-medium">{label}</p>
-      <p className={cn("text-2xl font-bold mt-0.5", color)}>{value}</p>
+    <div className="bg-white dark:bg-[#202024]/80 backdrop-blur-xl rounded-2xl border border-slate-200 dark:border-white/[0.08] shadow-sm dark:shadow-xl px-5 py-4 transition-colors">
+      <p className="text-xs text-slate-500 dark:text-zinc-400 font-medium">{label}</p>
+      <p className={cn("text-2xl font-bold mt-1 tracking-tight", color)}>{value}</p>
     </div>
   );
 }

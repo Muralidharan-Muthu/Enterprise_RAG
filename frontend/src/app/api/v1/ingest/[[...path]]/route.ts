@@ -23,6 +23,8 @@ async function proxy(req: NextRequest, pathSegments?: string[]) {
   const headers: Record<string, string> = {};
   const ct = req.headers.get("content-type");
   if (ct) headers["content-type"] = ct;
+  const auth = req.headers.get("authorization");
+  if (auth) headers["authorization"] = auth;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);

@@ -23,10 +23,10 @@ export default function DashboardLayout({
   // Show nothing while checking auth (prevents flash of protected content)
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#0a0f1e]">
+      <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-[#18181b]">
         <div className="flex flex-col items-center gap-4">
           <div className="w-10 h-10 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
-          <p className="text-sm text-gray-400">Loading...</p>
+          <p className="text-xs text-slate-500 dark:text-zinc-400">Authenticating session...</p>
         </div>
       </div>
     );
@@ -37,7 +37,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen bg-[#0a0f1e]">
+    <div className="flex h-screen bg-slate-50 dark:bg-[#18181b] text-slate-900 dark:text-zinc-100 transition-colors duration-200">
       <Sidebar />
       <div className="flex flex-col flex-1 overflow-hidden">
         <Header />

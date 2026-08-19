@@ -372,7 +372,7 @@ function TextChunkList({
           <div
             key={chunk.id}
             className={cn(
-              "border border-gray-200 dark:border-gray-800 border-l-4 rounded-lg overflow-hidden bg-white dark:bg-gray-900",
+              "border border-slate-200 dark:border-white/[0.08] border-l-4 rounded-xl overflow-hidden bg-white dark:bg-[#202024]",
               style.border
             )}
           >

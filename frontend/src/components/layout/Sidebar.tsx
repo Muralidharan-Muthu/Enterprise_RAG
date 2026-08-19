@@ -13,8 +13,6 @@ import {
   PanelLeftOpen,
   Loader2,
   LogOut,
-  User as UserIcon,
-  Sparkles,
   ExternalLink,
   type LucideIcon,
 } from "lucide-react";
@@ -27,7 +25,6 @@ interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  badge?: string;
 }
 
 const navItems: NavItem[] = [
@@ -46,14 +43,14 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "flex-shrink-0 bg-[#0c1222] border-r border-white/[0.07] flex flex-col overflow-hidden transition-[width] duration-300 ease-in-out z-20 select-none",
+        "flex-shrink-0 bg-white dark:bg-[#18181b] border-r border-slate-200/90 dark:border-white/[0.08] flex flex-col overflow-hidden transition-[width] duration-300 ease-in-out z-20 select-none",
         collapsed ? "w-16" : "w-64"
       )}
     >
       {/* ── Brand Header ────────────────────────────────────────────── */}
       <div
         className={cn(
-          "h-16 flex-shrink-0 border-b border-white/[0.07] flex items-center justify-between",
+          "h-16 flex-shrink-0 border-b border-slate-200/80 dark:border-white/[0.08] flex items-center justify-between",
           collapsed ? "px-3 justify-center" : "px-4"
         )}
       >
@@ -64,19 +61,19 @@ export function Sidebar() {
             collapsed && "w-0 opacity-0 pointer-events-none"
           )}
         >
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/25 flex-shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center shadow-md shadow-indigo-500/20 flex-shrink-0">
             <Database className="h-5 w-5 text-white" />
           </div>
           <div className="whitespace-nowrap">
             <div className="flex items-center gap-1.5">
-              <span className="text-sm font-bold tracking-tight text-white">Multi-Store RAG</span>
+              <span className="text-sm font-bold tracking-tight text-slate-900 dark:text-zinc-100">Multi-Store RAG</span>
             </div>
-            <span className="text-[10px] font-medium text-indigo-400">Enterprise Workspace</span>
+            <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">Enterprise Workspace</span>
           </div>
         </Link>
 
         {collapsed && (
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/25 flex-shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-md shadow-indigo-500/20 flex-shrink-0">
             <Database className="h-5 w-5 text-white" />
           </div>
         )}
@@ -86,7 +83,7 @@ export function Sidebar() {
           onClick={() => setCollapsed((c) => !c)}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           className={cn(
-            "h-7 w-7 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/[0.06] rounded-lg transition-colors",
+            "h-7 w-7 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:text-zinc-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.06] rounded-lg transition-colors",
             collapsed && "hidden"
           )}
         >
@@ -100,7 +97,7 @@ export function Sidebar() {
             type="button"
             onClick={() => setCollapsed(false)}
             aria-label="Expand sidebar"
-            className="h-7 w-7 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/[0.06] rounded-lg transition-colors"
+            className="h-7 w-7 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:text-zinc-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.06] rounded-lg transition-colors"
           >
             <PanelLeftOpen className="h-4 w-4" />
           </button>
@@ -110,7 +107,7 @@ export function Sidebar() {
       {/* ── Main Navigation ─────────────────────────────────────────── */}
       <div className="px-3 pt-4 pb-2">
         {!collapsed && (
-          <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+          <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
             Navigation
           </div>
         )}
@@ -128,21 +125,21 @@ export function Sidebar() {
                   "relative flex items-center rounded-xl text-sm font-medium transition-all duration-200 group",
                   collapsed ? "justify-center h-10 w-10 mx-auto px-0" : "px-3.5 py-2.5 gap-3",
                   active
-                    ? "bg-gradient-to-r from-indigo-600/20 to-violet-600/10 text-white border border-indigo-500/30 shadow-lg shadow-indigo-500/10 font-semibold"
-                    : "text-gray-400 hover:text-gray-200 hover:bg-white/[0.04]"
+                    ? "bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-500/30 font-semibold shadow-sm"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-white/[0.04]"
                 )}
               >
                 {/* Active Indicator Strip */}
                 {active && !collapsed && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-gradient-to-b from-indigo-400 to-violet-500 rounded-r-full" />
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-indigo-600 dark:bg-indigo-400 rounded-r-full" />
                 )}
 
                 <Icon
                   className={cn(
                     "h-4 w-4 flex-shrink-0 transition-colors",
                     active
-                      ? "text-indigo-400"
-                      : "text-gray-400 group-hover:text-gray-200"
+                      ? "text-indigo-600 dark:text-indigo-400"
+                      : "text-slate-400 group-hover:text-slate-700 dark:text-zinc-400 dark:group-hover:text-zinc-200"
                   )}
                 />
 
@@ -152,14 +149,14 @@ export function Sidebar() {
 
                 {/* Live count / spinner badge */}
                 {running > 0 && !collapsed && (
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 animate-pulse">
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 animate-pulse">
                     <Loader2 className="h-2.5 w-2.5 animate-spin" />
                     {running}
                   </span>
                 )}
 
                 {running > 0 && collapsed && (
-                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-[#0c1222]">
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white dark:ring-[#18181b]">
                     {running}
                   </span>
                 )}
@@ -174,12 +171,12 @@ export function Sidebar() {
         <Link
           href="/"
           className={cn(
-            "flex items-center rounded-xl text-xs font-medium text-gray-400 hover:text-indigo-300 hover:bg-white/[0.03] transition-all",
+            "flex items-center rounded-xl text-xs font-medium text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:text-zinc-400 dark:hover:text-indigo-300 dark:hover:bg-white/[0.03] transition-all",
             collapsed ? "justify-center h-10 w-10 mx-auto px-0" : "px-3.5 py-2 gap-2"
           )}
           title={collapsed ? "Landing Page" : undefined}
         >
-          <ExternalLink className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+          <ExternalLink className="h-3.5 w-3.5 flex-shrink-0 text-slate-400 dark:text-zinc-500" />
           {!collapsed && <span>Public Landing Page</span>}
         </Link>
       </div>
@@ -187,29 +184,29 @@ export function Sidebar() {
       <div className="flex-1" />
 
       {/* ── User Profile & Logout Area ──────────────────────────────── */}
-      <div className="p-3 border-t border-white/[0.07] bg-white/[0.01]">
+      <div className="p-3 border-t border-slate-200/80 dark:border-white/[0.08] bg-slate-50/50 dark:bg-white/[0.01]">
         {!collapsed ? (
           <div className="space-y-2">
-            <div className="flex items-center gap-3 p-2 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+            <div className="flex items-center gap-3 p-2 rounded-xl bg-white dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.06] shadow-sm dark:shadow-none">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center text-white font-bold text-xs shadow">
                 {user?.username ? user.username.charAt(0).toUpperCase() : "U"}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-white truncate">
+                <p className="text-xs font-semibold text-slate-900 dark:text-zinc-100 truncate">
                   {user?.username || "Logged In User"}
                 </p>
-                <p className="text-[10px] text-gray-400 truncate">
+                <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">
                   {user?.email || "user@rag.ai"}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center justify-between pt-1">
-              <ThemeToggle compact={true} />
+              <ThemeToggle compact={false} />
               <button
                 type="button"
                 onClick={logout}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
                 title="Log out"
               >
                 <LogOut className="h-3.5 w-3.5" />
@@ -219,10 +216,11 @@ export function Sidebar() {
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
+            <ThemeToggle compact={true} />
             <button
               type="button"
               onClick={logout}
-              className="w-10 h-10 rounded-xl flex items-center justify-center text-red-400 hover:bg-red-500/10 transition-colors"
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
               title="Log out"
             >
               <LogOut className="h-4 w-4" />

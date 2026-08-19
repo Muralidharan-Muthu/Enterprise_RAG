@@ -52,7 +52,7 @@ export default function DocumentDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
         {/* Left: document metadata */}
         <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 space-y-4 h-full">
+          <div className="bg-white dark:bg-[#202024]/80 rounded-2xl border border-slate-200 dark:border-white/[0.08] shadow-sm dark:shadow-xl p-5 space-y-4 h-full">
             {/* Filename */}
             <div className="flex items-start gap-3">
               <FileText className="h-5 w-5 text-gray-400 dark:text-gray-300 mt-0.5" />
@@ -135,7 +135,7 @@ export default function DocumentDetailPage() {
         <div className="lg:col-span-2 flex flex-col gap-4">
           {/* Summary */}
           {doc.doc_summary && (
-            <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5 flex-1">
+            <div className="bg-white dark:bg-[#202024]/80 rounded-2xl border border-slate-200 dark:border-white/[0.08] shadow-sm dark:shadow-xl p-5 flex-1">
               <p className="text-xs font-medium text-gray-500 dark:text-gray-300 mb-2 flex items-center gap-1">
                 <BookOpen className="h-3.5 w-3.5" />
                 Summary
@@ -163,7 +163,7 @@ export default function DocumentDetailPage() {
       </div>
 
       {/* ── Row 2: full-width knowledge store content ─────────── */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
+      <div className="bg-white dark:bg-[#202024]/80 rounded-2xl border border-slate-200 dark:border-white/[0.08] shadow-sm dark:shadow-xl p-5">
         <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-4">Knowledge Store Content</h2>
         {doc.status === "completed" ? (
           <ChunkViewer

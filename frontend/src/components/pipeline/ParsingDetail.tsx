@@ -17,17 +17,19 @@ function wordsOf(p: StageDetailPage): number {
 
 function Metric({ icon, label, value, hint }: { icon: React.ReactNode; label: string; value: React.ReactNode; hint?: string }) {
   return (
-    <div className="flex flex-col gap-0.5 px-3 py-2 bg-gray-50 dark:bg-gray-800/60 rounded border border-gray-100 dark:border-gray-700" title={hint}>
-      <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider font-medium">{icon}{label}</div>
-      <span className="text-base font-semibold text-gray-800 dark:text-gray-100 tabular-nums">{value}</span>
+    <div className="flex flex-col gap-0.5 px-3 py-2 bg-slate-50 dark:bg-[#202024] rounded-xl border border-slate-200/80 dark:border-white/[0.08] shadow-xs" title={hint}>
+      <div className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-zinc-400 uppercase tracking-wider font-semibold">
+        {icon}{label}
+      </div>
+      <span className="text-base font-bold text-slate-900 dark:text-zinc-100 tabular-nums">{value}</span>
     </div>
   );
 }
 
 function Count({ n, faint }: { n: number | null | undefined; faint?: boolean }) {
-  if (n == null) return <span className="text-gray-300 dark:text-gray-600">—</span>;
-  if (n === 0) return <span className="text-gray-300 dark:text-gray-600 tabular-nums">0</span>;
-  return <span className={cn("tabular-nums", faint ? "text-gray-400 dark:text-gray-500" : "font-medium text-gray-700 dark:text-gray-300")}>{n}</span>;
+  if (n == null) return <span className="text-slate-300 dark:text-zinc-600">—</span>;
+  if (n === 0) return <span className="text-slate-300 dark:text-zinc-600 tabular-nums">0</span>;
+  return <span className={cn("tabular-nums", faint ? "text-slate-400 dark:text-zinc-500" : "font-medium text-slate-700 dark:text-zinc-300")}>{n}</span>;
 }
 
 interface Props {
@@ -90,58 +92,58 @@ export function ParsingDetail({ doc, live, elapsed }: Props) {
   return (
     <div className="text-sm">
       {/* header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200/80 dark:border-white/[0.08] bg-slate-50/70 dark:bg-[#18181b]">
         <div className="flex items-center gap-2">
-          {live ? <Loader2 className="w-3.5 h-3.5 text-blue-500 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />}
-          <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">{live ? "Parsing — Live" : "Parsing Detail"}</span>
+          {live ? <Loader2 className="w-3.5 h-3.5 text-indigo-500 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-slate-500 dark:text-zinc-400" />}
+          <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300 uppercase tracking-wider">{live ? "Parsing — Live" : "Parsing Detail"}</span>
         </div>
-        {live && elapsed != null && <span className="text-xs tabular-nums text-gray-400 dark:text-gray-500">{fmtTime(elapsed)}{eta ? ` · ~${eta} left` : ""}</span>}
+        {live && elapsed != null && <span className="text-xs tabular-nums text-slate-400 dark:text-zinc-500">{fmtTime(elapsed)}{eta ? ` · ~${eta} left` : ""}</span>}
       </div>
 
       {/* overall page progress (live) */}
       {live && total > 0 && (
         <div className="px-4 pt-3">
-          <div className="flex justify-between text-[11px] text-gray-500 dark:text-gray-400 mb-1">
-            <span className="font-medium text-gray-700 dark:text-gray-300">{pagesDone} of {total} pages parsed</span>
-            <span className="tabular-nums">{pct}%</span>
+          <div className="flex justify-between text-[11px] text-slate-500 dark:text-zinc-400 mb-1.5">
+            <span className="font-semibold text-slate-800 dark:text-zinc-200">{pagesDone} of {total} pages parsed</span>
+            <span className="tabular-nums font-bold text-indigo-600 dark:text-indigo-400">{pct}%</span>
           </div>
-          <div className="w-full h-2 rounded bg-gray-100 dark:bg-gray-800 overflow-hidden">
-            <div className="h-full bg-blue-500 rounded transition-all duration-500" style={{ width: `${pct}%` }} />
+          <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-zinc-800 overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
           </div>
         </div>
       )}
 
       {/* metric cards — Tables & Images are live COUNTS that climb as pages finish */}
       <div className="px-4 py-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
-        <Metric icon={<BookOpen className="w-3 h-3" />} label="Pages" value={total} />
-        <Metric icon={<FileText className="w-3 h-3" />} label="Words" value={Number(sumWords).toLocaleString()} />
-        <Metric icon={<Table2 className="w-3 h-3" />} label="Tables" value={sumTables} />
-        <Metric icon={<ImageIcon className="w-3 h-3" />} label="Images" value={sumImages} />
-        <Metric icon={<Languages className="w-3 h-3" />} label="Language" value={live ? "…" : language} />
+        <Metric icon={<BookOpen className="w-3 h-3 text-indigo-500" />} label="Pages" value={total} />
+        <Metric icon={<FileText className="w-3 h-3 text-emerald-500" />} label="Words" value={Number(sumWords).toLocaleString()} />
+        <Metric icon={<Table2 className="w-3 h-3 text-cyan-500" />} label="Tables" value={sumTables} />
+        <Metric icon={<ImageIcon className="w-3 h-3 text-violet-500" />} label="Images" value={sumImages} />
+        <Metric icon={<Languages className="w-3 h-3 text-amber-500" />} label="Language" value={live ? "…" : language} />
       </div>
 
       {/* per-page table */}
       <div className="px-4 pb-3">
-        <div className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">
+        <div className="text-[10px] text-slate-400 dark:text-zinc-500 uppercase tracking-wider mb-2 font-semibold">
           Per-page breakdown
-          {live && <span className="normal-case text-gray-400"> · fills in as each page completes</span>}
+          {live && <span className="normal-case text-slate-400 font-normal"> · fills in as each page completes</span>}
         </div>
         {rows.length === 0 ? (
-          <div className="text-xs text-gray-400 dark:text-gray-500 py-2">No per-page data yet…</div>
+          <div className="text-xs text-slate-400 dark:text-zinc-500 py-4 text-center">No per-page data yet…</div>
         ) : (
-          <div className="overflow-y-auto" style={{ maxHeight: "420px" }}>
+          <div className="overflow-y-auto rounded-xl border border-slate-200/80 dark:border-white/[0.06] bg-slate-50/30 dark:bg-white/[0.01]" style={{ maxHeight: "420px" }}>
             <table className="w-full text-xs border-separate" style={{ borderSpacing: 0 }}>
-              <thead className="sticky top-0 bg-white dark:bg-gray-900">
-                <tr className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 text-left">
-                  <th className="py-1 pr-2 font-medium">Page</th>
-                  <th className="py-1 pr-2 font-medium">Words</th>
-                  <th className="py-1 px-2 font-medium text-center" title="Text blocks: paragraphs, headings and list items detected on the page">Blocks</th>
-                  <th className="py-1 px-2 font-medium text-center">Tables</th>
-                  <th className="py-1 px-2 font-medium text-center">Images</th>
-                  <th className="py-1 pl-2 font-medium text-center">Status</th>
+              <thead className="sticky top-0 bg-slate-100/90 dark:bg-[#202024]/95 backdrop-blur-md z-10">
+                <tr className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-zinc-400 text-left border-b border-slate-200/80 dark:border-white/[0.08]">
+                  <th className="py-2 pl-3 pr-2 font-semibold">Page</th>
+                  <th className="py-2 pr-2 font-semibold">Words</th>
+                  <th className="py-2 px-2 font-semibold text-center" title="Text blocks: paragraphs, headings and list items detected on the page">Blocks</th>
+                  <th className="py-2 px-2 font-semibold text-center">Tables</th>
+                  <th className="py-2 px-2 font-semibold text-center">Images</th>
+                  <th className="py-2 pr-3 pl-2 font-semibold text-center">Status</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
                 {rows.map((p) => {
                   const row = p as PageRow;
                   const w = wordsOf(p);
@@ -165,25 +167,25 @@ export function ParsingDetail({ doc, live, elapsed }: Props) {
                     <tr
                       key={p.page}
                       className={cn(
-                        "border-t border-gray-50 dark:border-gray-800/60 transition-all duration-500",
+                        "transition-all duration-300 hover:bg-slate-100/60 dark:hover:bg-white/[0.02]",
                         isPlaceholder && "opacity-35",
-                        inFlight && "opacity-70"
+                        inFlight && "opacity-75"
                       )}
                     >
-                      <td className="py-1.5 pr-2 tabular-nums text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap">
+                      <td className="py-2 pl-3 pr-2 tabular-nums text-slate-600 dark:text-zinc-300 font-medium whitespace-nowrap">
                         Pg {p.page}
                       </td>
-                      <td className="py-1.5 pr-2">
+                      <td className="py-2 pr-2">
                         <div className="flex items-center gap-2">
                           {/* progress bar */}
-                          <div className="w-16 h-2 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden shrink-0">
+                          <div className="w-16 h-2 rounded-full bg-slate-200/80 dark:bg-zinc-800 overflow-hidden shrink-0">
                             {inFlight ? (
-                              <div className="h-full w-full bg-blue-300 dark:bg-blue-800 animate-pulse rounded-full" />
+                              <div className="h-full w-full bg-indigo-400 dark:bg-indigo-600 animate-pulse rounded-full" />
                             ) : isPlaceholder ? (
-                              <div className="h-full w-[6%] bg-gray-300 dark:bg-gray-600 rounded-full" />
+                              <div className="h-full w-[6%] bg-slate-300 dark:bg-zinc-700 rounded-full" />
                             ) : (
                               <div
-                                className="h-full rounded-full transition-all duration-700 ease-out bg-emerald-400 dark:bg-emerald-500"
+                                className="h-full rounded-full transition-all duration-700 ease-out bg-emerald-500 dark:bg-emerald-400"
                                 style={{ width: `${barPct}%` }}
                               />
                             )}
@@ -192,39 +194,39 @@ export function ParsingDetail({ doc, live, elapsed }: Props) {
                           <span className="text-[10px] tabular-nums font-semibold w-8 shrink-0 text-right">
                             {done && barPctLabel
                               ? <span className="text-emerald-600 dark:text-emerald-400">{barPctLabel}</span>
-                              : <span className="text-gray-300 dark:text-gray-600">—</span>
+                              : <span className="text-slate-300 dark:text-zinc-600">—</span>
                             }
                           </span>
                           {/* word count */}
                           <span className={cn(
                             "tabular-nums text-xs",
-                            done ? "text-gray-600 dark:text-gray-300" : "text-gray-400 dark:text-gray-500"
+                            done ? "text-slate-700 dark:text-zinc-300 font-medium" : "text-slate-400 dark:text-zinc-500"
                           )}>
                             {done ? (w ? w.toLocaleString() : "0") : (inFlight ? "…" : "—")}
                           </span>
                         </div>
                       </td>
-                      <td className="py-1.5 px-2 text-center">
+                      <td className="py-2 px-2 text-center">
                         <span className="inline-flex items-center gap-0.5 justify-center">
-                          <Layers className="w-2.5 h-2.5 text-gray-400" />
+                          <Layers className="w-2.5 h-2.5 text-slate-400 dark:text-zinc-500" />
                           <Count n={done ? (p.blocks ?? 0) : null} />
                         </span>
                       </td>
-                      <td className="py-1.5 px-2 text-center">
+                      <td className="py-2 px-2 text-center">
                         <Count n={done ? (p.tables ?? 0) : null} />
                       </td>
-                      <td className="py-1.5 px-2 text-center text-indigo-600 dark:text-indigo-300">
+                      <td className="py-2 px-2 text-center text-indigo-600 dark:text-indigo-400">
                         <Count n={done ? p.images : null} faint={!done} />
                       </td>
-                      <td className="py-1.5 pl-2 text-center">
+                      <td className="py-2 pr-3 pl-2 text-center">
                         {done ? (
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 inline" />
                         ) : inFlight ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] text-blue-400">
+                          <span className="inline-flex items-center gap-1 text-[10px] text-indigo-500 dark:text-indigo-400">
                             <RotateCw className="w-3 h-3 animate-spin" />parsing
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] text-gray-400 dark:text-gray-500">
+                          <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 dark:text-zinc-500">
                             <Clock className="w-3 h-3" />queued
                           </span>
                         )}

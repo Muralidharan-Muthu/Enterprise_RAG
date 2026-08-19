@@ -18,10 +18,14 @@ export async function POST(req: NextRequest) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120_000); // 120 s
 
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const auth = req.headers.get("authorization");
+  if (auth) headers["authorization"] = auth;
+
   try {
     const upstream = await fetch(`${BACKEND}/api/v1/query`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body,
       signal: controller.signal,
     });

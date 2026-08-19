@@ -11,12 +11,6 @@ interface Props {
   maxSizeMB?: number;
 }
 
-/**
- * Compact drag-and-drop target matching the "Manage RAG Pipelines" design.
- * Backend ingestion accepts PDF, DOCX, PPTX, XLSX, HTML, and Markdown.
- * The dropzone mirrors this on the client side to catch obvious mismatches
- * before the request is sent — the backend remains the authoritative gate.
- */
 export function FileDropzone({ onFiles, disabled, maxSizeMB = 100 }: Props) {
   const [rejected, setRejected] = useState<string[]>([]);
 
@@ -51,7 +45,6 @@ export function FileDropzone({ onFiles, disabled, maxSizeMB = 100 }: Props) {
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
       "text/html": [".html", ".htm"],
       "text/markdown": [".md"],
-      // Windows browsers often report .md files as text/plain instead of text/markdown
       "text/plain": [".md"],
     },
     maxSize: maxSizeMB * 1024 * 1024,
@@ -64,32 +57,34 @@ export function FileDropzone({ onFiles, disabled, maxSizeMB = 100 }: Props) {
       <div
         {...getRootProps()}
         className={cn(
-          "border-2 border-dashed rounded-xl px-6 py-10 text-center cursor-pointer transition-colors",
+          "border-2 border-dashed rounded-2xl px-6 py-10 text-center cursor-pointer transition-all",
           isDragActive
-            ? "border-blue-400 bg-blue-50 dark:bg-blue-950"
-            : "border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 hover:border-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700",
+            ? "border-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/40"
+            : "border-slate-300 dark:border-slate-700/80 bg-slate-50/70 dark:bg-slate-900/40 hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-slate-100/80 dark:hover:bg-slate-800/50",
           disabled && "opacity-50 cursor-not-allowed pointer-events-none"
         )}
       >
         <input {...getInputProps()} />
-        <div className="flex flex-col items-center gap-2">
-          <Upload className="h-7 w-7 text-gray-400 dark:text-gray-500" />
-          <p className="text-base font-semibold text-gray-700 dark:text-gray-300">
+        <div className="flex flex-col items-center gap-2.5">
+          <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200/60 dark:border-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+            <Upload className="h-6 w-6" />
+          </div>
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
             {isDragActive
-              ? "Drop files here"
+              ? "Drop files here to upload"
               : "Drag & drop files, or click to browse"}
           </p>
-          <p className="text-sm text-gray-400 dark:text-gray-500">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             PDF, DOCX, PPTX, XLSX, HTML, MD — up to {maxSizeMB} MB per file
           </p>
         </div>
       </div>
 
       {rejected.length > 0 && (
-        <div className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-900 px-3 py-2 text-xs text-red-600 dark:text-red-300">
+        <div className="flex items-start gap-2 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 px-3.5 py-2.5 text-xs text-red-600 dark:text-red-300">
           <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
           <div className="space-y-0.5">
-            <p className="font-medium">Some files were rejected (unsupported format or too large):</p>
+            <p className="font-medium">Some files were rejected:</p>
             {rejected.map((m, i) => (
               <p key={i}>{m}</p>
             ))}
