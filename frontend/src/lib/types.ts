@@ -207,7 +207,7 @@ export interface DocumentImagesResponse {
   metrics?: ImageMetrics; // optional for backward-compat during deploy
 }
 
-export type ChunkStore = "vector" | "table" | "clause" | "research";
+export type ChunkStore = "vector" | "table" | "clause";
 export interface ChunksResponse {
   items: Record<string, unknown>[];
   total: number;

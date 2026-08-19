@@ -145,9 +145,7 @@ class TestVlmPromptSchemaBlock:
         assert "headers" in ias._VLM_PROMPT
 
     def test_prompt_contains_document_store_hint(self):
-        # document_store schema_hint mentions 'chunk_text'
-        assert "document_store" in ias._VLM_PROMPT
-        assert "chunk_text" in ias._VLM_PROMPT
+        assert "vector_store" in ias._VLM_PROMPT
 
     def test_prompt_contains_clause_store_hint(self):
         assert "clause_store" in ias._VLM_PROMPT

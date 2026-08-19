@@ -837,29 +837,9 @@ def _resolve_chunk_page_range(page_number, chunk_metadata) -> tuple:
 
 def _query_table_store(conn, embedding: np.ndarray, document_types, document_id, top_k: int,
                         table_filters: Optional["TableFilters"] = None) -> list:
-    """Query table content via child row-windows (table_chunk_store) when
-    TABLE_CHILD_SEARCH_ENABLED, falling back to parent-summary ANN for tables
-    that have no children (tiny/image-derived tables with empty json_data).
-
-    Result deduplication: multiple windows from the same table_id are collapsed
-    to the top-K best-distance windows (K = settings.TABLE_MAX_WINDOWS_PER_QUERY_RESULT,
-    default 2) so one wide table can't flood the pool, while still allowing more
-    than one genuinely relevant row-window from the same table to survive.
-    When TABLE_CHILD_SEARCH_ENABLED is False, the original parent-only ANN path
-    is used unchanged.
-
-    table_filters (Slice 4, optional): structured prefilter on table_store
-    columns (currency/fiscal_year/table_category/has_numeric_data/
-    extraction_quality), applied to `ts` (table_store) BEFORE the vector ANN
-    in both the child-join query and the parent-only fallback, so filtered
-    tables stay consistent across both paths. None/empty => no extra
-    predicates, identical SQL to before Slice 4.
-    """
-    from app.config import settings as _cfg
-
-    if not _cfg.TABLE_CHILD_SEARCH_ENABLED:
-        return _query_table_store_parent_only(conn, embedding, document_types, document_id, top_k,
-                                               table_filters=table_filters)
+    """Query table content directly via table_store."""
+    return _query_table_store_parent_only(conn, embedding, document_types, document_id, top_k,
+                                           table_filters=table_filters)
 
     # ── Child ANN search (table_chunk_store JOIN table_store) ─────────────────
     type_sql_ts, type_params_ts = _type_filter(document_types, alias="dr")

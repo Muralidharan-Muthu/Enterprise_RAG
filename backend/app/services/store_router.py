@@ -1125,13 +1125,12 @@ class DocumentStoreHandler(StoreHandler):
 _TABLE_HANDLER = TableStoreHandler()
 _CLAUSE_HANDLER = ClauseStoreHandler()
 _VECTOR_HANDLER = VectorStoreHandler()
-_DOCUMENT_HANDLER = DocumentStoreHandler()
 
 STORE_REGISTRY: dict[str, StoreHandler] = {
     "table_store": _TABLE_HANDLER,
     "clause_store": _CLAUSE_HANDLER,
     "vector_store": _VECTOR_HANDLER,
-    "document_store": _DOCUMENT_HANDLER,
+    "document_store": _VECTOR_HANDLER,
 }
 """Canonical store name → StoreHandler.
 

@@ -35,7 +35,7 @@ export default function DocumentDetailPage() {
   }
 
   const totalChunks =
-    doc.vector_chunks + doc.table_count + doc.clause_count + doc.research_chunks;
+    (doc.vector_chunks ?? 0) + (doc.table_count ?? 0) + (doc.clause_count ?? 0);
 
   return (
     <div className="space-y-6">

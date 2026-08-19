@@ -99,12 +99,11 @@ def get_document(document_id: str):
                        d.language_detected, d.doc_metadata, d.storage_path,
                        d.completed_at, d.created_at, d.error_message,
                        COALESCE(vs.n, 0), COALESCE(ts.n, 0),
-                       COALESCE(cs.n, 0), COALESCE(ds.n, 0)
+                       COALESCE(cs.n, 0), 0
                 FROM multi_store_rag_working.document_registry d
                 LEFT JOIN (SELECT document_id, COUNT(*) n FROM multi_store_rag_working.vector_store  GROUP BY document_id) vs ON vs.document_id = d.id
                 LEFT JOIN (SELECT document_id, COUNT(*) n FROM multi_store_rag_working.table_store    GROUP BY document_id) ts ON ts.document_id = d.id
                 LEFT JOIN (SELECT document_id, COUNT(*) n FROM multi_store_rag_working.clause_store   GROUP BY document_id) cs ON cs.document_id = d.id
-                LEFT JOIN (SELECT document_id, COUNT(*) n FROM multi_store_rag_working.document_store GROUP BY document_id) ds ON ds.document_id = d.id
                 WHERE d.id = %s
                 """,
                 (document_id,),
@@ -185,13 +184,6 @@ def get_page_stats(document_id: str):
             clauses_by_page = {r[0]: r[1] for r in cur.fetchall()}
 
             cur.execute(
-                """SELECT page_number, COUNT(*) FROM multi_store_rag_working.document_store
-                   WHERE document_id = %s AND page_number IS NOT NULL GROUP BY page_number""",
-                (document_id,),
-            )
-            research_by_page = {r[0]: r[1] for r in cur.fetchall()}
-
-            cur.execute(
                 """SELECT page_number, COUNT(*) FROM multi_store_rag_working.image_store
                    WHERE document_id = %s AND page_number IS NOT NULL GROUP BY page_number""",
                 (document_id,),
@@ -202,7 +194,7 @@ def get_page_stats(document_id: str):
     pages = [
         {
             "page": p,
-            "chunks": text_by_page.get(p, 0) + research_by_page.get(p, 0),
+            "chunks": text_by_page.get(p, 0),
             "tables": tables_by_page.get(p, 0),
             "clauses": clauses_by_page.get(p, 0),
             "images": images_by_page.get(p, 0),
@@ -378,13 +370,13 @@ def _try_delete_from_storage(bucket: str, path: str) -> None:
 @router.get("/{document_id}/chunks")
 def get_document_chunks(
     document_id: str,
-    store: str = Query("vector", pattern="^(vector|table|clause|research)$"),
+    store: str = Query("vector", pattern="^(vector|table|clause)$"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
 ):
     """
     Return paginated chunks from a specific store for a document.
-    store: vector | table | clause | research
+    store: vector | table | clause
     """
     offset = (page - 1) * limit
 
@@ -392,11 +384,9 @@ def get_document_chunks(
         "vector": ("multi_store_rag_working.vector_store",
                    "id, chunk_index, chunk_text, page_number, section_title, semantic_type, keywords, chunk_metadata"),
         "table": ("multi_store_rag_working.table_store",
-                  "id, table_index, table_title, page_number, raw_text, markdown_text, json_data, table_category, row_count, col_count, structured_content"),
+                   "id, table_index, table_title, page_number, raw_text, markdown_text, json_data, table_category, row_count, col_count, structured_content"),
         "clause": ("multi_store_rag_working.clause_store",
                    "id, clause_index, clause_number, clause_title, clause_text, clause_type, risk_level, page_number, section_path, parties_mentioned"),
-        "research": ("multi_store_rag_working.document_store",
-                     "id, chunk_index, chunk_text, chunk_type, page_number, section_title, source_title, source_doi, contains_finding"),
     }
 
     table_name, columns = store_map[store]

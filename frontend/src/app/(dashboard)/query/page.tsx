@@ -2149,17 +2149,74 @@ function DocumentChat({
       {/* ── Messages ── */}
       <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
         {messages.length === 0 && !isPending && (
-          <div className="h-full flex flex-col items-center justify-center text-center py-12">
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-500/20 to-indigo-600/20 rounded-2xl flex items-center justify-center mb-4 border border-blue-500/20">
-              <MessageSquare className="h-8 w-8 text-blue-400" />
+          <div className="h-full flex flex-col items-center justify-center text-center py-8 max-w-2xl mx-auto">
+            <div className="w-14 h-14 bg-gradient-to-br from-indigo-500/20 to-violet-600/20 rounded-2xl flex items-center justify-center mb-4 border border-indigo-500/20 shadow-lg shadow-indigo-500/10">
+              <Sparkles className="h-7 w-7 text-indigo-500 dark:text-indigo-400" />
             </div>
-            <p className="text-base font-medium text-gray-800 dark:text-gray-200 mb-1">
-              Ask about your documents
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-gray-100 mb-1">
+              Query Multi-Store Document Intelligence
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-gray-400 max-w-md mb-6">
+              Ask anything across financial statements, legal contracts, M&amp;A corporate structures, and policies.
             </p>
-            <p className="text-sm text-gray-500 dark:text-gray-500 max-w-sm mb-8">
-              I search all uploaded documents using semantic embeddings and synthesise accurate
-              answers with source citations.
-            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full text-left">
+              <button
+                type="button"
+                onClick={() => send("What was the total revenue, EBITDA, and YoY growth across all business segments in FY24?")}
+                className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.08] hover:border-emerald-500/50 dark:hover:border-emerald-500/40 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 transition-all text-left group"
+              >
+                <div className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 mb-0.5 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  Financial &amp; Tabular Query
+                </div>
+                <div className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 group-hover:text-slate-900 dark:group-hover:text-slate-200">
+                  &quot;What was the total revenue, EBITDA, and YoY growth across all segments in FY24?&quot;
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => send("Show all clauses with HIGH or CRITICAL risk ratings and summarize the termination terms.")}
+                className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.08] hover:border-amber-500/50 dark:hover:border-amber-500/40 hover:bg-amber-50/40 dark:hover:bg-amber-950/20 transition-all text-left group"
+              >
+                <div className="text-[11px] font-semibold text-amber-700 dark:text-amber-300 mb-0.5 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  Legal Clause &amp; Risk Analyzer
+                </div>
+                <div className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 group-hover:text-slate-900 dark:group-hover:text-slate-200">
+                  &quot;Show all clauses with HIGH or CRITICAL risk ratings and summarize the termination terms.&quot;
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => send("Trace the relationships, subsidiaries, and corporate board linkages mentioned across documents.")}
+                className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.08] hover:border-violet-500/50 dark:hover:border-violet-500/40 hover:bg-violet-50/40 dark:hover:bg-violet-950/20 transition-all text-left group"
+              >
+                <div className="text-[11px] font-semibold text-violet-700 dark:text-violet-300 mb-0.5 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />
+                  Neo4j GraphRAG Multi-Hop
+                </div>
+                <div className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 group-hover:text-slate-900 dark:group-hover:text-slate-200">
+                  &quot;Trace the relationships, subsidiaries, and corporate board linkages mentioned across documents.&quot;
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => send("What are the key compliance rules, sustainability targets, and corporate policies?")}
+                className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.08] hover:border-blue-500/50 dark:hover:border-blue-500/40 hover:bg-blue-50/40 dark:hover:bg-blue-950/20 transition-all text-left group"
+              >
+                <div className="text-[11px] font-semibold text-blue-700 dark:text-blue-300 mb-0.5 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                  Semantic Policy &amp; SOP Search
+                </div>
+                <div className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 group-hover:text-slate-900 dark:group-hover:text-slate-200">
+                  &quot;What are the key compliance rules, sustainability targets, and corporate policies?&quot;
+                </div>
+              </button>
+            </div>
           </div>
         )}
 

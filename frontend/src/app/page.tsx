@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { AppLogoIcon } from "@/components/ui/AppLogo";
 import {
   Zap,
-  Database,
   Layers,
   Network,
   Shield,
@@ -14,11 +14,13 @@ import {
   Sparkles,
   ArrowRight,
   CheckCircle2,
-  Cpu,
   Search,
   ChevronRight,
-  GitBranch,
   Bot,
+  BarChart3,
+  FileCheck,
+  Building2,
+  BookOpen,
 } from "lucide-react";
 
 export default function LandingPage() {
@@ -44,8 +46,8 @@ export default function LandingPage() {
       <header className="sticky top-0 z-50 border-b border-white/[0.08] bg-[#18181b]/85 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/25 group-hover:scale-105 transition-transform">
-              <Database className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/25 group-hover:scale-105 transition-transform p-2">
+              <AppLogoIcon className="w-full h-full text-white" />
             </div>
             <div>
               <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-white via-gray-100 to-gray-400 bg-clip-text text-transparent">
@@ -59,13 +61,16 @@ export default function LandingPage() {
 
           <nav className="hidden md:flex items-center gap-8 text-sm text-gray-400">
             <a href="#stores" className="hover:text-white transition-colors">
-              Multi-Store Architecture
+              Specialized Stores
+            </a>
+            <a href="#documents" className="hover:text-white transition-colors">
+              Supported Documents
             </a>
             <a href="#features" className="hover:text-white transition-colors">
               Features
             </a>
             <a href="#workflow" className="hover:text-white transition-colors">
-              How it Works
+              Pipeline
             </a>
           </nav>
 
@@ -112,14 +117,16 @@ export default function LandingPage() {
         {/* Main Headline */}
         <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight max-w-5xl mx-auto leading-[1.1] mb-6">
           One Query Engine. <br />
-          <span className="gradient-text">Five Specialized Stores.</span>
+          <span className="bg-gradient-to-r from-indigo-400 via-violet-400 to-cyan-400 bg-clip-text text-transparent">
+            Five Purpose-Built Intelligent Stores.
+          </span>
         </h1>
 
         {/* Subtitle */}
         <p className="text-lg sm:text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed mb-10">
           Stop flattening complex documents into generic text embeddings. Multi-Store RAG automatically
-          partitions PDFs, financials, contracts, and research into purpose-built Postgres stores and
-          Neo4j knowledge graphs with sub-second accuracy.
+          partitions financial tables, legal clauses, cross-document entities, prose, and visual charts into
+          purpose-built Postgres engines and Neo4j knowledge graphs with sub-second accuracy.
         </p>
 
         {/* Action Buttons */}
@@ -178,19 +185,19 @@ export default function LandingPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Store 1: Table Store */}
-          <div className="group relative p-7 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-indigo-500/40 transition-all duration-300">
+          <div className="group relative p-7 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-emerald-500/40 transition-all duration-300">
             <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mb-5 text-emerald-400 group-hover:scale-110 transition-transform">
               <FileSpreadsheet className="w-6 h-6" />
             </div>
             <div className="flex items-center justify-between mb-2">
-              <h4 className="text-lg font-semibold text-white">Financial Table Store</h4>
+              <h4 className="text-lg font-semibold text-white">Financial Table &amp; KPI Store</h4>
               <span className="text-[10px] font-mono uppercase bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded">
                 table_store
               </span>
             </div>
             <p className="text-sm text-gray-400 leading-relaxed mb-4">
-              Row-window chunking + per-cell typed values (`table_cell_store`). Supports server-side
-              SQL pushdown for mathematical calculations (`SUM`, `AVG`, `WHERE &gt; 50K`).
+              Macro table grids and structured row metrics (`table_row_store`). Supports server-side
+              SQL pushdown for exact mathematical calculations (`SUM`, `AVG`, `WHERE &gt; 50K`).
             </p>
             <div className="text-xs font-mono text-emerald-400/80 flex items-center gap-2">
               <CheckCircle2 className="w-3.5 h-3.5" />
@@ -199,12 +206,12 @@ export default function LandingPage() {
           </div>
 
           {/* Store 2: Clause Store */}
-          <div className="group relative p-7 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-indigo-500/40 transition-all duration-300">
+          <div className="group relative p-7 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-amber-500/40 transition-all duration-300">
             <div className="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center mb-5 text-amber-400 group-hover:scale-110 transition-transform">
               <Scale className="w-6 h-6" />
             </div>
             <div className="flex items-center justify-between mb-2">
-              <h4 className="text-lg font-semibold text-white">Legal Clause Store</h4>
+              <h4 className="text-lg font-semibold text-white">Legal Clause &amp; Risk Store</h4>
               <span className="text-[10px] font-mono uppercase bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded">
                 clause_store
               </span>
@@ -220,7 +227,7 @@ export default function LandingPage() {
           </div>
 
           {/* Store 3: GraphRAG Knowledge Store */}
-          <div className="group relative p-7 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-indigo-500/40 transition-all duration-300">
+          <div className="group relative p-7 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-violet-500/40 transition-all duration-300">
             <div className="w-12 h-12 rounded-xl bg-violet-500/15 border border-violet-500/30 flex items-center justify-center mb-5 text-violet-400 group-hover:scale-110 transition-transform">
               <Network className="w-6 h-6" />
             </div>
@@ -241,7 +248,7 @@ export default function LandingPage() {
           </div>
 
           {/* Store 4: Policy & Narrative Vector Store */}
-          <div className="group relative p-7 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-indigo-500/40 transition-all duration-300">
+          <div className="group relative p-7 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-blue-500/40 transition-all duration-300">
             <div className="w-12 h-12 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center mb-5 text-blue-400 group-hover:scale-110 transition-transform">
               <FileText className="w-6 h-6" />
             </div>
@@ -261,45 +268,117 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Store 5: Research Document Store */}
-          <div className="group relative p-7 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-indigo-500/40 transition-all duration-300">
-            <div className="w-12 h-12 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center mb-5 text-cyan-400 group-hover:scale-110 transition-transform">
-              <Layers className="w-6 h-6" />
-            </div>
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-lg font-semibold text-white">Document Registry</h4>
-              <span className="text-[10px] font-mono uppercase bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded">
-                document_store
-              </span>
-            </div>
-            <p className="text-sm text-gray-400 leading-relaxed mb-4">
-              Retains page hierarchies, section headers, bibliographies, and bounding boxes for
-              interactive PDF preview and high-fidelity source verification.
-            </p>
-            <div className="text-xs font-mono text-cyan-400/80 flex items-center gap-2">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              Source Verification &amp; Page BBoxes
-            </div>
-          </div>
-
-          {/* Store 6: Image & Visual Store */}
-          <div className="group relative p-7 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-indigo-500/40 transition-all duration-300">
+          {/* Store 5: Image & Visual Figure Store */}
+          <div className="group relative p-7 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.08] hover:border-pink-500/40 transition-all duration-300 md:col-span-2 lg:col-span-2">
             <div className="w-12 h-12 rounded-xl bg-pink-500/15 border border-pink-500/30 flex items-center justify-center mb-5 text-pink-400 group-hover:scale-110 transition-transform">
               <Sparkles className="w-6 h-6" />
             </div>
             <div className="flex items-center justify-between mb-2">
-              <h4 className="text-lg font-semibold text-white">Visual &amp; Figure Store</h4>
+              <h4 className="text-lg font-semibold text-white">Visual Figure &amp; Multimodal VLM Store</h4>
               <span className="text-[10px] font-mono uppercase bg-pink-500/20 text-pink-300 px-2 py-0.5 rounded">
                 image_store
               </span>
             </div>
             <p className="text-sm text-gray-400 leading-relaxed mb-4">
-              Crops charts, diagrams, and visual tables directly from pages. Synthesizes visual
-              descriptions via VLM and indexes OCR text for visual search.
+              Crops charts, diagrams, and visual tables directly from PDF pages. Synthesizes visual descriptions
+              via Google Gemma 4 VLM and extracts OCR text for visual grounding and exact figure citations.
             </p>
             <div className="text-xs font-mono text-pink-400/80 flex items-center gap-2">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              Visual Table Crops &amp; VLM OCR
+              Visual Table Crops, VLM OCR &amp; Visual Citations
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Supported Enterprise Documents Section ────────────────────────── */}
+      <section id="documents" className="relative z-10 py-20 px-6 max-w-7xl mx-auto border-t border-white/[0.06]">
+        <div className="text-center mb-16">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-cyan-400 mb-3">
+            Enterprise Ingestion
+          </h2>
+          <h3 className="text-3xl sm:text-4xl font-bold tracking-tight">
+            What Documents Can You Upload?
+          </h3>
+          <p className="text-gray-400 max-w-2xl mx-auto mt-3 text-sm sm:text-base">
+            Our multi-store pipeline automatically detects document structure and routes every section into its optimal datastore.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Doc Type 1: Financial & Corporate Reports */}
+          <div className="p-7 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-emerald-500/30 transition-all">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                <BarChart3 className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-lg font-semibold text-white">Financial &amp; Corporate Reports</h4>
+                <span className="text-xs text-emerald-400 font-mono">10-K, 10-Q, Annual Reports, P&amp;L</span>
+              </div>
+            </div>
+            <p className="text-sm text-gray-400 mb-4 leading-relaxed">
+              Balance sheets, revenue matrices, cash flows, and investor earnings releases. Processed by our SQL pushdown engine for exact numerical computation without hallucinations.
+            </p>
+            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.05] text-xs font-mono text-gray-300">
+              <span className="text-emerald-400 font-semibold">Example Query:</span> &quot;What was the total EBITDA and YoY revenue growth across all segments in FY24?&quot;
+            </div>
+          </div>
+
+          {/* Doc Type 2: Legal Contracts & Agreements */}
+          <div className="p-7 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-amber-500/30 transition-all">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                <FileCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-lg font-semibold text-white">Legal Agreements &amp; Contracts</h4>
+                <span className="text-xs text-amber-400 font-mono">MSAs, NDAs, SLAs, Compliance Mandates</span>
+              </div>
+            </div>
+            <p className="text-sm text-gray-400 mb-4 leading-relaxed">
+              Master service agreements, vendor contracts, and terms of service. Deconstructed into classified clauses with automated risk tier tagging (LOW/MEDIUM/HIGH/CRITICAL).
+            </p>
+            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.05] text-xs font-mono text-gray-300">
+              <span className="text-amber-400 font-semibold">Example Query:</span> &quot;Show all clauses with HIGH risk rating and list the termination notice periods.&quot;
+            </div>
+          </div>
+
+          {/* Doc Type 3: M&A & Corporate Ecosystems */}
+          <div className="p-7 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-violet-500/30 transition-all">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-violet-500/20 text-violet-400 flex items-center justify-center">
+                <Building2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-lg font-semibold text-white">M&amp;A &amp; Multi-Entity Filings</h4>
+                <span className="text-xs text-violet-400 font-mono">IPO Prospectuses, Shareholder Circulars</span>
+              </div>
+            </div>
+            <p className="text-sm text-gray-400 mb-4 leading-relaxed">
+              Cross-enterprise ownership structures, subsidiary trees, and supplier ecosystems. Mapped into Neo4j for multi-hop graph traversal across documents.
+            </p>
+            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.05] text-xs font-mono text-gray-300">
+              <span className="text-violet-400 font-semibold">Example Query:</span> &quot;Trace all subsidiaries owned by the parent firm and their executive board linkages.&quot;
+            </div>
+          </div>
+
+          {/* Doc Type 4: Corporate Policies & Technical SOPs */}
+          <div className="p-7 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-blue-500/30 transition-all">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                <BookOpen className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-lg font-semibold text-white">Policies, SOPs &amp; ESG Reports</h4>
+                <span className="text-xs text-blue-400 font-mono">Employee Handbooks, Sustainability, SOPs</span>
+              </div>
+            </div>
+            <p className="text-sm text-gray-400 mb-4 leading-relaxed">
+              Standard operating procedures, governance policies, and sustainability reports. Indexed with 1024-dimensional BGE embeddings for dense semantic matching.
+            </p>
+            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.05] text-xs font-mono text-gray-300">
+              <span className="text-blue-400 font-semibold">Example Query:</span> &quot;What are the corporate carbon reduction targets for 2030 and whistle-blower rules?&quot;
             </div>
           </div>
         </div>
@@ -368,7 +447,7 @@ export default function LandingPage() {
             <div className="text-3xl font-mono font-bold text-indigo-400/40 mb-3">01</div>
             <h4 className="text-base font-semibold text-white mb-2">Upload &amp; OCR Parse</h4>
             <p className="text-xs text-gray-400 leading-relaxed">
-              Files are ingested via Docling / PyMuPDF, extracting raw text, visual crops, and table grids.
+              PDFs are ingested via Docling &amp; PyMuPDF, extracting clean text, visual figure crops, and macro table grids.
             </p>
           </div>
 
@@ -376,7 +455,7 @@ export default function LandingPage() {
             <div className="text-3xl font-mono font-bold text-indigo-400/40 mb-3">02</div>
             <h4 className="text-base font-semibold text-white mb-2">Multi-Store Partition</h4>
             <p className="text-xs text-gray-400 leading-relaxed">
-              Content is routed to tables, clauses, vector chunks, and Neo4j entity nodes simultaneously.
+              Content is routed to tables, clauses, vector chunks, image crops, and Neo4j entity nodes simultaneously.
             </p>
           </div>
 
@@ -384,7 +463,7 @@ export default function LandingPage() {
             <div className="text-3xl font-mono font-bold text-indigo-400/40 mb-3">03</div>
             <h4 className="text-base font-semibold text-white mb-2">Query Planning &amp; Rerank</h4>
             <p className="text-xs text-gray-400 leading-relaxed">
-              Intent classifier routes queries to semantic, SQL, or graph paths, then fuses with cross-encoder.
+              Intent classifier routes queries to semantic, SQL, or graph paths, then fuses with cross-encoder reranking.
             </p>
           </div>
 
@@ -392,7 +471,7 @@ export default function LandingPage() {
             <div className="text-3xl font-mono font-bold text-indigo-400/40 mb-3">04</div>
             <h4 className="text-base font-semibold text-white mb-2">Cited LLM Synthesis</h4>
             <p className="text-xs text-gray-400 leading-relaxed">
-              Generates stream answers with exact page numbers, table badges, and confidence metrics.
+              Generates stream answers with exact page numbers, visual figure cards, and table badges.
             </p>
           </div>
         </div>
@@ -422,15 +501,17 @@ export default function LandingPage() {
 
       {/* ── Footer ────────────────────────────────────────────────────────── */}
       <footer className="relative z-10 border-t border-white/[0.06] py-10 px-6 max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-500">
-        <div className="flex items-center gap-2">
-          <Database className="w-4 h-4 text-indigo-400" />
+        <div className="flex items-center gap-2.5">
+          <div className="w-5 h-5 text-indigo-400">
+            <AppLogoIcon className="w-full h-full" />
+          </div>
           <span className="font-semibold text-gray-400">Multi-Store RAG System</span>
           <span>© 2026 Enterprise Intelligence</span>
         </div>
         <div className="flex items-center gap-6">
           <span className="flex items-center gap-1.5 text-emerald-400">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            All Systems Operational
+            All Stores Operational
           </span>
         </div>
       </footer>

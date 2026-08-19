@@ -148,9 +148,8 @@ export default function SignupPage() {
                   {Array.from({ length: 5 }).map((_, i) => (
                     <div
                       key={i}
-                      className={`h-1 flex-1 rounded-full transition-all duration-300 ${
-                        i < strength ? strengthColors[strength - 1] : "bg-white/[0.08]"
-                      }`}
+                      className={`h-1 flex-1 rounded-full transition-all duration-300 ${i < strength ? strengthColors[strength - 1] : "bg-white/[0.08]"
+                        }`}
                     />
                   ))}
                 </div>
@@ -175,11 +174,10 @@ export default function SignupPage() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                className={`w-full pl-10 pr-4 py-3 bg-white/[0.05] border rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
-                  confirmPassword && confirmPassword !== password
+                className={`w-full pl-10 pr-4 py-3 bg-white/[0.05] border rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${confirmPassword && confirmPassword !== password
                     ? "border-red-500/50 focus:ring-red-500/50"
                     : "border-white/[0.1] focus:ring-indigo-500/50 focus:border-indigo-500/50"
-                }`}
+                  }`}
               />
             </div>
           </div>

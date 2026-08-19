@@ -95,8 +95,28 @@ export default function UploadPage() {
             Ingestion Pipeline
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Upload files to parse, chunk, embed, and route across all 5 specialized stores.
+            Upload PDFs to parse, chunk, embed, and route across our specialized tabular, clause, vector, graph, and visual stores.
           </p>
+        </div>
+      </div>
+
+      {/* ── Document Type Guide ─────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="p-3.5 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-500/20">
+          <div className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">Financial Filings</div>
+          <div className="text-[10px] text-emerald-600 dark:text-emerald-400/80 mt-0.5">10-K, Annual Reports, P&amp;L</div>
+        </div>
+        <div className="p-3.5 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-500/20">
+          <div className="text-[11px] font-semibold text-amber-800 dark:text-amber-300">Legal Contracts</div>
+          <div className="text-[10px] text-amber-600 dark:text-amber-400/80 mt-0.5">MSAs, NDAs, Risk Clauses</div>
+        </div>
+        <div className="p-3.5 rounded-xl bg-violet-50/50 dark:bg-violet-950/20 border border-violet-200/60 dark:border-violet-500/20">
+          <div className="text-[11px] font-semibold text-violet-800 dark:text-violet-300">M&amp;A &amp; IPOs</div>
+          <div className="text-[10px] text-violet-600 dark:text-violet-400/80 mt-0.5">Org Trees, Prospectuses</div>
+        </div>
+        <div className="p-3.5 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-500/20">
+          <div className="text-[11px] font-semibold text-blue-800 dark:text-blue-300">Policies &amp; ESG</div>
+          <div className="text-[10px] text-blue-600 dark:text-blue-400/80 mt-0.5">SOPs, Handbooks, Audits</div>
         </div>
       </div>
 

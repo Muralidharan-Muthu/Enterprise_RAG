@@ -596,7 +596,6 @@ def chunk_embed_store_task(self, prev: dict, document_id: str, job_id: str) -> d
                 }
 
                 total_rows = 0
-                total_cells = 0
                 for t in parsed_doc.tables:
                     table_uuid = table_index_to_uuid.get(t.table_index)
                     if table_uuid is None or not t.headers or not t.rows:
@@ -604,20 +603,16 @@ def chunk_embed_store_task(self, prev: dict, document_id: str, job_id: str) -> d
                     row_tuples = table_schema_service.build_row_store_rows(
                         document_id, table_uuid, t.headers, t.rows,
                     )
-                    cell_tuples = table_schema_service.build_cell_store_rows(
-                        document_id, table_uuid, t.headers, t.rows,
-                    )
                     total_rows += insert_table_rows(row_tuples)
-                    total_cells += insert_table_cells(cell_tuples)
 
                 if total_rows:
                     logger.info(
-                        "[%s] Stored %d row(s) / %d cell(s) in table_row_store/"
-                        "table_cell_store", document_id, total_rows, total_cells,
+                        "[%s] Stored %d unified row(s) in table_row_store",
+                        document_id, total_rows,
                     )
             except Exception as _cell_exc:
                 logger.warning(
-                    "[%s] table_cell_store population failed (non-fatal — "
+                    "[%s] table_row_store population failed (non-fatal — "
                     "falls back to tier-2 structured query engine): %s",
                     document_id, _cell_exc,
                 )

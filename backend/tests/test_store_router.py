@@ -119,8 +119,8 @@ class TestRegistry:
 
     def test_get_handler_document_store(self):
         h = get_handler("document_store")
-        assert isinstance(h, DocumentStoreHandler)
-        assert h.name == "document_store"
+        assert isinstance(h, VectorStoreHandler)
+        assert h.name == "vector_store"
 
     def test_get_handler_returns_none_for_image_store(self):
         assert get_handler("image_store") is None

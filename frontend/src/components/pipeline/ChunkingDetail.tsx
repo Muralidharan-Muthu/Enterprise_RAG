@@ -520,7 +520,6 @@ export function ChunkingDetail({ doc }: Props) {
     { store: "vector", label: "Text", count: doc.vector_chunks, Icon: FileText },
     { store: "table", label: "Tables", count: doc.table_count, Icon: Table2 },
     { store: "clause", label: "Clauses", count: doc.clause_count, Icon: Scale },
-    { store: "research", label: "Research", count: doc.research_chunks, Icon: FlaskConical },
   ];
 
   const availableTabs = tabDefs.filter((t) => t.count > 0);

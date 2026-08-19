@@ -62,7 +62,7 @@ export function DocumentTable({ documents }: Props) {
             {documents.map((doc) => {
               const isProcessing = PROCESSING_STATUSES.includes(doc.status);
               const totalChunks =
-                doc.vector_chunks + doc.table_count + doc.clause_count + doc.research_chunks;
+                (doc.vector_chunks ?? 0) + (doc.table_count ?? 0) + (doc.clause_count ?? 0);
 
               return (
                 <tr key={doc.id} className="hover:bg-slate-50/80 dark:hover:bg-white/[0.02] transition-colors group">

@@ -126,7 +126,7 @@ const mdComponents = {
   td: (p: any) => <td className="px-3 py-2 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 align-top" {...p} />,
 };
 
-type StoreTab = "vector" | "table" | "clause" | "research";
+type StoreTab = "vector" | "table" | "clause";
 
 interface Props {
   documentId: string;
@@ -134,7 +134,7 @@ interface Props {
   vectorChunks: number;
   tableCount: number;
   clauseCount: number;
-  researchChunks: number;
+  researchChunks?: number;
 }
 
 /** Pretty-print structured_content: JSON gets indented, plain text passes through. */
@@ -189,7 +189,6 @@ function parseMarkdownTable(
       .replace(/\|$/, "")
       .split("|")
       .map((c) => c.trim());
-  // separator row like | --- | --- |
   const isSep = (l: string) => /^[\s:|-]+$/.test(l) && l.includes("-");
 
   const headers = splitRow(lines[0]);
@@ -208,13 +207,11 @@ export function ChunkViewer({
   vectorChunks,
   tableCount,
   clauseCount,
-  researchChunks,
 }: Props) {
   const tabs = [
     { id: "vector" as StoreTab, label: "Vector Chunks", count: vectorChunks },
     { id: "table" as StoreTab, label: "Tables", count: tableCount },
     { id: "clause" as StoreTab, label: "Clauses", count: clauseCount },
-    { id: "research" as StoreTab, label: "Research", count: researchChunks },
   ].filter((t) => t.count > 0);
 
   const [activeTab, setActiveTab] = useState<StoreTab>(tabs[0]?.id ?? "vector");

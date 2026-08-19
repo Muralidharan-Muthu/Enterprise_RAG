@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 from pathlib import Path
 
@@ -35,12 +35,9 @@ def truncate_all_tables():
         tables = [
             "chat_messages",
             "chat_sessions",
-            "table_cell_store",
             "table_row_store",
-            "table_chunk_store",
             "table_store",
             "clause_store",
-            "document_store",
             "image_store",
             "vector_store",
             "parse_staging",

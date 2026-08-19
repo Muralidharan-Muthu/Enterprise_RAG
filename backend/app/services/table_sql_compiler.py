@@ -1,16 +1,9 @@
 """Compiles table_condition_parser ASTs into parameterized SQL pushdown
-queries against table_cell_store / table_row_store (migration 019).
+queries against unified table_row_store (migration 023).
 
 This is the tier-1 execution engine for filter/aggregation/ranking/GROUP BY
 table queries: runs entirely server-side (indexed WHERE/INTERSECT/UNION/
-GROUP BY), never loads a full table into Python. table_query_engine.py's
-Python/JSONB engine (scans table_store.json_data in memory) remains as the
-tier-2 fallback for tables that haven't been backfilled into
-table_cell_store yet, or if a pushdown query errors.
-
-Multi-table: unlike a single best-match lookup, every candidate table whose
-columns satisfy the query contributes matches — two tables sharing a
-"Sector" column both surface rows instead of only the first.
+GROUP BY) against table_row_store (row_data + row_numeric + row_text).
 """
 from __future__ import annotations
 
@@ -30,7 +23,7 @@ logger = logging.getLogger(__name__)
 _OP_SYMBOLS = {"GT": ">", "GTE": ">=", "LT": "<", "LTE": "<="}
 
 
-# ── Candidate table discovery (cell-store-backed tables only) ──────────────
+# ── Candidate table discovery ──────────────────────────────────────────────
 
 def _fetch_pushdown_candidate_tables(
     conn, document_id: Optional[str], document_types: Optional[list],
@@ -39,7 +32,7 @@ def _fetch_pushdown_candidate_tables(
     params: list = []
 
     if document_id:
-        clauses.append("tcs.document_id = %s")
+        clauses.append("trs.document_id = %s")
         params.append(document_id)
     if document_types:
         placeholders = ", ".join(["%s"] * len(document_types))
@@ -48,11 +41,11 @@ def _fetch_pushdown_candidate_tables(
 
     where_sql = " AND ".join(clauses)
     sql = f"""
-        SELECT DISTINCT tcs.table_id::text, tcs.document_id::text,
+        SELECT DISTINCT trs.table_id::text, trs.document_id::text,
                ts.table_title, dr.original_filename
-        FROM multi_store_rag_working.table_cell_store tcs
-        JOIN multi_store_rag_working.table_store ts ON ts.id = tcs.table_id
-        JOIN multi_store_rag_working.document_registry dr ON dr.id = tcs.document_id
+        FROM multi_store_rag_working.table_row_store trs
+        JOIN multi_store_rag_working.table_store ts ON ts.id = trs.table_id
+        JOIN multi_store_rag_working.document_registry dr ON dr.id = trs.document_id
         WHERE {where_sql}
     """
     with conn.cursor() as cur:
@@ -67,11 +60,9 @@ def _fetch_pushdown_candidate_tables(
 
 def _table_columns(conn, table_id: str) -> list[str]:
     sql = """
-        SELECT column_name, MIN(column_index) AS idx
-        FROM multi_store_rag_working.table_cell_store
+        SELECT DISTINCT jsonb_object_keys(row_data)
+        FROM multi_store_rag_working.table_row_store
         WHERE table_id = %s
-        GROUP BY column_name
-        ORDER BY idx
     """
     with conn.cursor() as cur:
         cur.execute(sql, [table_id])
@@ -84,22 +75,14 @@ def _resolve_column(hint: str, columns: list[str]) -> Optional[str]:
 
 
 def _resolve_column_by_value(conn, table_id: str, values: list[str]) -> Optional[str]:
-    """When a condition names no column at all ("list all companies in
-    Chemicals" never says "Sector"), find whichever column's actual cell
-    VALUES match best — the same strategy the tier-2 Python engine
-    (_run_list_filter) already uses, just pushed into SQL: the column with
-    the most rows whose normalized value_text equals one of `values` wins.
-    Mirrors table_query_engine._fuzzy_find_column's exact-match preference
-    (value_text is already normalized via _normalize_label at both
-    ingestion and query time, so this is an exact indexed lookup, not a
-    fuzzy scan)."""
     normalized = [_normalize_label(str(v)) for v in values]
     placeholders = ", ".join(["%s"] * len(normalized))
     sql = f"""
-        SELECT column_name, COUNT(*) AS matches
-        FROM multi_store_rag_working.table_cell_store
-        WHERE table_id = %s AND value_text IN ({placeholders})
-        GROUP BY column_name
+        SELECT key, COUNT(*) AS matches
+        FROM multi_store_rag_working.table_row_store,
+             jsonb_each_text(row_data)
+        WHERE table_id = %s AND LOWER(TRIM(value)) IN ({placeholders})
+        GROUP BY key
         ORDER BY matches DESC
         LIMIT 1
     """
@@ -110,16 +93,10 @@ def _resolve_column_by_value(conn, table_id: str, values: list[str]) -> Optional
 
 
 def _resolve_numeric_column_by_fallback(conn, table_id: str) -> Optional[str]:
-    """When a numeric comparison ("invoices above $10,000") names no
-    column, fall back to the table's sole numeric column if it has exactly
-    one — a reasonable heuristic for the common case of one obvious amount/
-    price/total column. Ambiguous (0 or 2+ numeric columns) tables are
-    skipped rather than guessing wrong."""
     sql = """
-        SELECT column_name
-        FROM multi_store_rag_working.table_cell_store
-        WHERE table_id = %s AND value_numeric IS NOT NULL
-        GROUP BY column_name
+        SELECT DISTINCT jsonb_object_keys(row_numeric)
+        FROM multi_store_rag_working.table_row_store
+        WHERE table_id = %s
     """
     with conn.cursor() as cur:
         cur.execute(sql, [table_id])
@@ -144,27 +121,39 @@ def _compile_condition(conn, cond: Condition, table_id: str, columns: list[str])
         return None
 
     base = (
-        "SELECT row_index FROM multi_store_rag_working.table_cell_store "
-        "WHERE table_id = %s AND column_name = %s"
+        "SELECT row_index FROM multi_store_rag_working.table_row_store "
+        "WHERE table_id = %s"
     )
-    params: list = [table_id, column]
+    params: list = [table_id]
 
     if cond.op == "EQ":
-        return base + " AND value_text = %s", params + [_normalize_label(str(cond.value))]
+        return (
+            base + " AND LOWER(TRIM(row_data->>%s)) = %s",
+            params + [column, _normalize_label(str(cond.value))],
+        )
     if cond.op == "LIKE":
-        return base + " AND value_text ILIKE %s", params + [f"%{_normalize_label(str(cond.value))}%"]
+        return (
+            base + " AND LOWER(TRIM(row_data->>%s)) ILIKE %s",
+            params + [column, f"%{_normalize_label(str(cond.value))}%"],
+        )
     if cond.op == "IN":
         values = [_normalize_label(str(v)) for v in cond.value]
         placeholders = ", ".join(["%s"] * len(values))
-        return base + f" AND value_text IN ({placeholders})", params + values
+        return (
+            base + f" AND LOWER(TRIM(row_data->>%s)) IN ({placeholders})",
+            params + [column] + values,
+        )
     if cond.op in _OP_SYMBOLS:
         return (
-            base + f" AND value_numeric {_OP_SYMBOLS[cond.op]} %s",
-            params + [cond.value],
+            base + f" AND (row_numeric->>%s)::numeric {_OP_SYMBOLS[cond.op]} %s",
+            params + [column, cond.value],
         )
     if cond.op == "BETWEEN":
         lo, hi = cond.value
-        return base + " AND value_numeric BETWEEN %s AND %s", params + [lo, hi]
+        return (
+            base + " AND (row_numeric->>%s)::numeric BETWEEN %s AND %s",
+            params + [column, lo, hi],
+        )
 
     return None
 
@@ -179,8 +168,6 @@ def _compile_tree(conn, node, table_id: str, columns: list[str]) -> Optional[tup
         compiled = [_compile_tree(conn, c, table_id, columns) for c in node.children]
 
         if node.op == "AND":
-            # Every branch must be satisfiable — if any leaf's column doesn't
-            # exist in this table, the whole conjunction is impossible here.
             if any(c is None for c in compiled):
                 return None
             sqls = [f"({sql})" for sql, _ in compiled]
@@ -220,10 +207,7 @@ def run_filter(
     ranking: Optional[RankingClause] = None,
     max_rows: int = 200,
 ) -> Optional[dict]:
-    """Exhaustive filter (and optional ranking sort/limit) across every
-    cell-store-backed candidate table. Returns None only when no table's
-    columns could satisfy the condition tree at all (caller falls back to
-    the Python/JSONB tier-2 engine)."""
+    """Exhaustive filter and ranking across table_row_store candidate tables."""
     try:
         with get_db() as conn:
             tables = _fetch_pushdown_candidate_tables(conn, document_id, document_types)
@@ -251,11 +235,9 @@ def run_filter(
                         cur.execute(sql, params)
                         row_indices = [r[0] for r in cur.fetchall()]
                 else:
-                    # No condition tree (pure ranking/"list all" with no filter) —
-                    # every row in this table is a candidate.
                     with conn.cursor() as cur:
                         cur.execute(
-                            "SELECT DISTINCT row_index FROM multi_store_rag_working.table_cell_store "
+                            "SELECT DISTINCT row_index FROM multi_store_rag_working.table_row_store "
                             "WHERE table_id = %s",
                             [table_id],
                         )
@@ -268,15 +250,13 @@ def run_filter(
                     rc_hint = ranking.column_hint
                     rc = _resolve_column(rc_hint, columns) if rc_hint else None
                     if rc is None:
-                        # Fall back to the only numeric column if the hint didn't resolve.
                         continue
                     ranking_column = ranking_column or rc
                     with conn.cursor() as cur:
                         cur.execute(
-                            "SELECT row_index, value_numeric FROM multi_store_rag_working.table_cell_store "
-                            "WHERE table_id = %s AND column_name = %s "
-                            "AND row_index = ANY(%s) AND value_numeric IS NOT NULL",
-                            [table_id, rc, row_indices],
+                            "SELECT row_index, (row_numeric->>%s)::numeric FROM multi_store_rag_working.table_row_store "
+                            "WHERE table_id = %s AND row_index = ANY(%s) AND (row_numeric->>%s) IS NOT NULL",
+                            [rc, table_id, row_indices, rc],
                         )
                         scored = cur.fetchall()
                     if not scored:
@@ -332,12 +312,7 @@ def run_aggregate(
     document_id: Optional[str] = None,
     document_types: Optional[list] = None,
 ) -> Optional[dict]:
-    """SQL-side SUM/AVG/COUNT/MIN/MAX, optionally scoped by a WHERE condition
-    tree, across every cell-store-backed candidate table (summed/merged
-    across tables that share the aggregated column). Column resolution
-    reuses table_query_engine._extract_target_column's sliding-window fuzzy
-    match against the raw query text and this table's real headers, the
-    same logic the tier-2 Python engine already relies on."""
+    """SQL-side SUM/AVG/COUNT/MIN/MAX against table_row_store."""
     try:
         with get_db() as conn:
             tables = _fetch_pushdown_candidate_tables(conn, document_id, document_types)
@@ -377,7 +352,7 @@ def run_aggregate(
                     else:
                         with conn.cursor() as cur:
                             cur.execute(
-                                "SELECT COUNT(DISTINCT row_index) FROM multi_store_rag_working.table_cell_store "
+                                "SELECT COUNT(DISTINCT row_index) FROM multi_store_rag_working.table_row_store "
                                 "WHERE table_id = %s",
                                 [table_id],
                             )
@@ -388,17 +363,17 @@ def run_aggregate(
                 resolved_column_name = column
                 if row_indices is not None:
                     sql = (
-                        "SELECT value_numeric FROM multi_store_rag_working.table_cell_store "
-                        "WHERE table_id = %s AND column_name = %s AND row_index = ANY(%s) "
-                        "AND value_numeric IS NOT NULL"
+                        "SELECT (row_numeric->>%s)::numeric FROM multi_store_rag_working.table_row_store "
+                        "WHERE table_id = %s AND row_index = ANY(%s) "
+                        "AND (row_numeric->>%s) IS NOT NULL"
                     )
-                    params = [table_id, column, row_indices]
+                    params = [column, table_id, row_indices, column]
                 else:
                     sql = (
-                        "SELECT value_numeric FROM multi_store_rag_working.table_cell_store "
-                        "WHERE table_id = %s AND column_name = %s AND value_numeric IS NOT NULL"
+                        "SELECT (row_numeric->>%s)::numeric FROM multi_store_rag_working.table_row_store "
+                        "WHERE table_id = %s AND (row_numeric->>%s) IS NOT NULL"
                     )
-                    params = [table_id, column]
+                    params = [column, table_id, column]
                 with conn.cursor() as cur:
                     cur.execute(sql, params)
                     col_values = [float(r[0]) for r in cur.fetchall()]
@@ -454,12 +429,7 @@ def run_group_by(
     document_id: Optional[str] = None,
     document_types: Optional[list] = None,
 ) -> Optional[dict]:
-    """GROUP BY <group_by_hint>, <agg_op>(<column resolved from agg_query_text>),
-    optionally scoped by a WHERE condition tree. Merges groups with the same
-    key across every candidate table. agg_query_text should be the original
-    query with the "by <column>" grouping clause already stripped, so
-    _extract_target_column's sliding-window match isn't misled by the group
-    column's own name."""
+    """GROUP BY <group_by_hint>, <agg_op>(<column>) directly on table_row_store."""
     agg_sql = _AGG_SQL.get(agg_op)
     if agg_sql is None and agg_op != "COUNT":
         return None
@@ -494,28 +464,26 @@ def run_group_by(
                     if compiled is None:
                         continue
                     sub_sql, sub_params = compiled
-                    row_filter_sql = f"AND g.row_index IN ({sub_sql})"
+                    row_filter_sql = f"AND row_index IN ({sub_sql})"
                     row_filter_params = sub_params
 
                 if agg_op == "COUNT":
                     sql = f"""
-                        SELECT g.value_text, COUNT(*)
-                        FROM multi_store_rag_working.table_cell_store g
-                        WHERE g.table_id = %s AND g.column_name = %s {row_filter_sql}
-                        GROUP BY g.value_text
+                        SELECT row_data->>%s, COUNT(*)
+                        FROM multi_store_rag_working.table_row_store
+                        WHERE table_id = %s AND row_data->>%s IS NOT NULL {row_filter_sql}
+                        GROUP BY row_data->>%s
                     """
-                    params = [table_id, group_col] + row_filter_params
+                    params = [group_col, table_id, group_col] + row_filter_params + [group_col]
                 else:
                     sql = f"""
-                        SELECT g.value_text, a.value_numeric
-                        FROM multi_store_rag_working.table_cell_store g
-                        JOIN multi_store_rag_working.table_cell_store a
-                          ON a.table_id = g.table_id AND a.row_index = g.row_index
-                        WHERE g.table_id = %s AND g.column_name = %s
-                          AND a.column_name = %s AND a.value_numeric IS NOT NULL
+                        SELECT row_data->>%s, (row_numeric->>%s)::numeric
+                        FROM multi_store_rag_working.table_row_store
+                        WHERE table_id = %s AND row_data->>%s IS NOT NULL
+                          AND (row_numeric->>%s) IS NOT NULL
                           {row_filter_sql}
                     """
-                    params = [table_id, group_col, agg_col] + row_filter_params
+                    params = [group_col, agg_col, table_id, group_col, agg_col] + row_filter_params
 
                 with conn.cursor() as cur:
                     cur.execute(sql, params)
