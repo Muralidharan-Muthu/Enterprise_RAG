@@ -8,6 +8,7 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
+RED='\033[0;31m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,7 +31,7 @@ echo "============================================================"
 echo -e "${NC}"
 
 # 1. Stop background API from PID file or process search
-echo -e "${BLUE}[1/3] Stopping FastAPI backend...${NC}"
+echo -e "${BLUE}[1/4] Stopping FastAPI backend...${NC}"
 if [ -f "$SCRIPT_DIR/.api.pid" ]; then
     API_PID=$(cat "$SCRIPT_DIR/.api.pid" 2>/dev/null || true)
     if [ -n "$API_PID" ]; then
@@ -42,7 +43,7 @@ pkill -f "uvicorn app.main:app" 2>/dev/null || true
 echo -e "${GREEN}  ✓ FastAPI backend stopped.${NC}"
 
 # 2. Stop Celery worker from PID file or process search
-echo -e "\n${BLUE}[2/3] Stopping Celery worker...${NC}"
+echo -e "\n${BLUE}[2/4] Stopping Celery worker...${NC}"
 if [ -f "$SCRIPT_DIR/.worker.pid" ]; then
     WORKER_PID=$(cat "$SCRIPT_DIR/.worker.pid" 2>/dev/null || true)
     if [ -n "$WORKER_PID" ]; then
@@ -53,8 +54,14 @@ fi
 pkill -f "celery -A app.core.background_tasks" 2>/dev/null || true
 echo -e "${GREEN}  ✓ Celery worker stopped.${NC}"
 
-# 3. Stop Docker Redis
-echo -e "\n${BLUE}[3/3] Stopping Docker Redis container...${NC}"
+# 3. Stop Next.js dev server if running in background
+echo -e "\n${BLUE}[3/4] Stopping Next.js frontend...${NC}"
+pkill -f "next-dev" 2>/dev/null || true
+pkill -f "next dev" 2>/dev/null || true
+echo -e "${GREEN}  ✓ Frontend process cleared.${NC}"
+
+# 4. Stop Docker Redis
+echo -e "\n${BLUE}[4/4] Stopping Docker Redis container...${NC}"
 if command -v docker &> /dev/null; then
     if docker compose version &> /dev/null; then
         docker compose stop redis 2>/dev/null || true

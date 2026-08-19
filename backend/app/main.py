@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.core.logging import setup_logging
 from app.core.tracing import setup_tracing
-from app.api.routes import health, ingestion, documents, query, chats, graph as graph_routes
+from app.api.routes import health, ingestion, documents, query, chats, graph as graph_routes, auth as auth_routes
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -116,6 +116,7 @@ app.include_router(documents.router, prefix="/api/v1/documents", tags=["document
 app.include_router(query.router, prefix="/api/v1", tags=["query"])
 app.include_router(chats.router, prefix="/api/v1/chats", tags=["chats"])
 app.include_router(graph_routes.router, prefix="/api/v1/graph", tags=["graph"])
+app.include_router(auth_routes.router, prefix="/api/v1/auth", tags=["auth"])
 
 
 @app.get("/", include_in_schema=False)

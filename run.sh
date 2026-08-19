@@ -53,6 +53,10 @@ cleanup() {
         fi
         rm -f "$SCRIPT_DIR/.worker.pid"
     fi
+
+    # Extra safety: terminate any orphaned uvicorn / celery processes
+    pkill -f "uvicorn app.main:app" 2>/dev/null || true
+    pkill -f "celery -A app.core.background_tasks" 2>/dev/null || true
     echo -e "${GREEN}Services stopped.${NC}"
 }
 trap cleanup EXIT INT TERM
@@ -73,9 +77,9 @@ fi
 # Activate virtual environment for backend
 cd "$SCRIPT_DIR/backend"
 if [ -f ".venv/bin/activate" ]; then
-    source .venv/bin/activate
+    source ".venv/bin/activate"
 elif [ -f ".venv/Scripts/activate" ]; then
-    source .venv/Scripts/activate
+    source ".venv/Scripts/activate"
 else
     echo -e "${RED}[ERROR] backend/.venv not found. Please run ./setup.sh first.${NC}"
     exit 1
@@ -98,11 +102,13 @@ echo -e "${GREEN}  ✓ Celery worker started (PID: $WORKER_PID)${NC}"
 # 4. Start Next.js Frontend in Foreground
 echo -e "\n${BLUE}[4/4] Starting Next.js Frontend on http://localhost:3000 ...${NC}"
 echo -e "${CYAN}============================================================${NC}"
-echo -e "  🌐 ${YELLOW}Frontend UI:${NC}        http://localhost:3000"
+echo -e "  🌟 ${YELLOW}Landing Page:${NC}       http://localhost:3000"
+echo -e "  🔐 ${YELLOW}Sign In / Up:${NC}       http://localhost:3000/login"
+echo -e "  💬 ${YELLOW}AI Chatbot:${NC}         http://localhost:3000/query"
+echo -e "  📂 ${YELLOW}Upload & Ingest:${NC}    http://localhost:3000/upload"
 echo -e "  ⚙️  ${YELLOW}Backend Docs:${NC}       http://localhost:8000/api/docs"
 echo -e "  🩺 ${YELLOW}Health Check:${NC}       http://localhost:8000/api/v1/health"
-echo -e "  📦 ${YELLOW}Redis:${NC}              localhost:6379"
-echo -e "  ⚡ ${YELLOW}Celery Worker:${NC}      Active"
+echo -e "  📦 ${YELLOW}Redis Cache:${NC}        localhost:6379"
 echo -e "${CYAN}============================================================${NC}"
 echo -e "${YELLOW}Press Ctrl+C or run ./stop.sh to stop all services.${NC}\n"
 

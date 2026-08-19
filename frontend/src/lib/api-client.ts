@@ -19,14 +19,20 @@ import type {
   QueryResponse,
   UploadResponse,
 } from "./types";
+import { getAuthToken } from "./auth";
 
 // Use empty base so requests go through Next.js proxy (/api/* → backend).
 // Direct http://localhost:8000 bypasses the proxy and hits CORS on non-3000 ports.
 const BASE = typeof window !== "undefined" ? "" : (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000");
 
+function _authHeaders(): Record<string, string> {
+  const token = getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers: { "Content-Type": "application/json", ..._authHeaders(), ...init?.headers },
     // Our polling hooks (useDocumentImages, usePipeline, etc.) hit the exact
     // same URL every 1-1.2s while a run is live. Without this, the browser's
     // HTTP cache can serve back the FIRST response it saw for that URL (e.g.
@@ -50,6 +56,7 @@ export const apiClient = {
     form.append("file", file);
     const res = await fetch(`${BASE}/api/v1/ingest/upload`, {
       method: "POST",
+      headers: _authHeaders(),
       body: form,
     });
     if (!res.ok) {
@@ -70,6 +77,7 @@ export const apiClient = {
 
     const res = await fetch(`${BASE}/api/v1/ingest/pipeline`, {
       method: "POST",
+      headers: _authHeaders(),
       body: form,
     });
     if (!res.ok) {

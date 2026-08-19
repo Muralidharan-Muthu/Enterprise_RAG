@@ -58,3 +58,7 @@ Thumbs.db
 # unwanted
 screenshots
 !deploy.sh
+
+.api.pid
+.worker.pid
+
