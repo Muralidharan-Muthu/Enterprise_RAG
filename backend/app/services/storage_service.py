@@ -112,12 +112,8 @@ def store_chunks(
         ids = _store_clauses(document_id, legal_clauses, clause_embeddings, parsed_doc)
         if ids:
             stored_ids["clause_store"] = ids
-    elif document_type == "research":
-        ids = _store_research_chunks(document_id, chunks, embeddings)
-        if ids:
-            stored_ids["document_store"] = ids
     else:
-        # policy / financial / entity / legal-without-extracted-clauses
+        # policy / financial / research / entity / legal-without-extracted-clauses
         if chunks and len(embeddings) > 0:
             ids = _store_vector_chunks(document_id, chunks, embeddings)
             if ids:
@@ -452,38 +448,7 @@ def _store_research_chunks(
     chunks: list[Chunk],
     embeddings: np.ndarray,
 ) -> list[str]:
-    rows = []
-    for chunk, emb in zip(chunks, embeddings):
-        rows.append((
-            document_id,
-            chunk.chunk_index,
-            chunk.chunk_text,
-            "body",
-            chunk.page_number,
-            chunk.section_title,
-            emb.tolist(),
-            json.dumps(chunk.chunk_metadata),
-        ))
-
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            result = psycopg2.extras.execute_values(
-                cur,
-                """
-                INSERT INTO multi_store_rag_working.document_store
-                    (document_id, chunk_index, chunk_text, chunk_type,
-                     page_number, section_title, embedding, chunk_metadata)
-                VALUES %s
-                RETURNING id
-                """,
-                rows,
-                template="(%s, %s, %s, %s, %s, %s, %s::vector, %s::jsonb)",
-                page_size=500,
-                fetch=True,
-            )
-    ids = [str(r[0]) for r in result]
-    logger.info("Stored %d research chunks for document %s", len(rows), document_id)
-    return ids
+    return _store_vector_chunks(document_id, chunks, embeddings)
 
 
 def _table_image_path(document_id: str, table_index: int) -> str:

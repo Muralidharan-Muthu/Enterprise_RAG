@@ -68,7 +68,7 @@ def get_run(run_id: str) -> dict | None:
                   ij.processed_chunks, ij.stage_timings,
                   ij.queued_at, ij.started_at, ij.completed_at, ij.duration_seconds,
                   COALESCE(vs.n, 0), COALESCE(ts.n, 0),
-                  COALESCE(cs.n, 0), COALESCE(ds.n, 0),
+                  COALESCE(cs.n, 0), 0,
                   ij.stage_detail
                 FROM multi_store_rag_working.document_registry dr
                 LEFT JOIN LATERAL (
@@ -80,7 +80,6 @@ def get_run(run_id: str) -> dict | None:
                 LEFT JOIN (SELECT document_id, COUNT(*) n FROM multi_store_rag_working.vector_store  GROUP BY document_id) vs ON vs.document_id = dr.id
                 LEFT JOIN (SELECT document_id, COUNT(*) n FROM multi_store_rag_working.table_store    GROUP BY document_id) ts ON ts.document_id = dr.id
                 LEFT JOIN (SELECT document_id, COUNT(*) n FROM multi_store_rag_working.clause_store   GROUP BY document_id) cs ON cs.document_id = dr.id
-                LEFT JOIN (SELECT document_id, COUNT(*) n FROM multi_store_rag_working.document_store GROUP BY document_id) ds ON ds.document_id = dr.id
                 WHERE dr.pipeline_run_id = %s
                 ORDER BY dr.created_at ASC
                 """,
@@ -101,7 +100,7 @@ def get_run(run_id: str) -> dict | None:
                     "started_at": r[18], "completed_at": r[19],
                     "duration_seconds": r[20],
                     "vector_chunks": int(r[21]), "table_count": int(r[22]),
-                    "clause_count": int(r[23]), "research_chunks": int(r[24]),
+                    "clause_count": int(r[23]), "research_chunks": 0,
                     "stage_detail": r[25] or {},
                 })
 
