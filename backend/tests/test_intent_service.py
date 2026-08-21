@@ -35,7 +35,7 @@ def test_rule_based_ambiguous_searches_all_stores():
 
 def test_classify_intent_falls_back_when_no_endpoint():
     with patch("app.config.settings") as s:
-        s.GEMMA4_BASE_URL = ""
+        s.GROQ_BASE_URL = ""
         out = intent.classify_intent("what is the termination clause")
     assert out["used_fallback"] is True
     assert "clause" in out["stores"]

@@ -18,7 +18,7 @@ const BACKEND =
  *
  * The AbortController timeout must therefore cover the entire pre-stream
  * work, not just a TCP connection handshake.  We use 180 s (3× the backend's
- * GEMMA4_TIMEOUT_SECONDS=120) so even a slow retrieval + queued LLM call
+ * GROQ_TIMEOUT_SECONDS=120) so even a slow retrieval + queued LLM call
  * never hits this deadline under normal conditions.
  */
 export const dynamic = "force-dynamic";

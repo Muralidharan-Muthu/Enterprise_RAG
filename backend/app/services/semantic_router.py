@@ -8,7 +8,7 @@ Why this exists (tier 2 of intent_service.classify_intent's escalation ladder):
   contain one of its literal keywords, so paraphrases ("what did the firm earn
   last quarter" with no "revenue"/"fiscal"/"earnings" keyword) fall through to
   the recall-safe all-stores case even though they are clearly about numbers.
-- Gemma (intent_service's LLM path) is accurate but adds a full network round
+- Groq (intent_service's LLM path) is accurate but adds a full network round
   trip on the query's critical path, so it's gated off by default.
 - This module sits between the two: it reuses the query embedding retrieve()
   already computes for the vector search itself (embedding_service.embed_query),

@@ -21,7 +21,7 @@ import re
 from typing import Optional
 
 from app.config import settings
-from app.services import gemma_client
+from app.services import groq_client
 from app.services import synthesis_service
 
 logger = logging.getLogger(__name__)
@@ -96,15 +96,15 @@ async def judge(query: str, reranked_chunks: list) -> dict:
 
     Returns fail-open (_FAIL_OPEN) when:
     - SPYDER_ENABLED is False (should not be called, but guard anyway)
-    - GEMMA4_BASE_URL is not configured
-    - Gemma call or parsing fails for any reason
+    - GROQ_BASE_URL is not configured
+    - Groq call or parsing fails for any reason
     """
     if not settings.SPYDER_ENABLED:
         logger.debug("SPYDER disabled — returning sufficient=True")
         return _FAIL_OPEN.copy()
 
-    if not settings.GEMMA4_BASE_URL:
-        logger.debug("GEMMA4_BASE_URL not set — SPYDER returning fail-open")
+    if not settings.GROQ_BASE_URL:
+        logger.debug("GROQ_BASE_URL not set — SPYDER returning fail-open")
         return _FAIL_OPEN.copy()
 
     if not reranked_chunks:
@@ -120,7 +120,7 @@ async def judge(query: str, reranked_chunks: list) -> dict:
         context_blocks = synthesis_service._build_context(reranked_chunks)
         user_prompt = _USER_TEMPLATE.format(query=query, context_blocks=context_blocks)
 
-        raw = await gemma_client.chat_async(
+        raw = await groq_client.chat_async(
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},

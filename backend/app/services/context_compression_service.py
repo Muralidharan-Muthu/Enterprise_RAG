@@ -3,7 +3,7 @@ Context Compression Service — extractive, accuracy-first.
 
 Position in the pipeline: AFTER reranking, BEFORE synthesis. The reranker picks
 the top-k most relevant *chunks*; this stage then trims each text chunk down to
-its query-relevant *sentences*, so the Gemma prompt spends its character budget
+its query-relevant *sentences*, so the Groq prompt spends its character budget
 on signal instead of lead-biased filler.
 
 Design principles (why this shape):

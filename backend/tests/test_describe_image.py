@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import app.services.image_analysis_service as ias
 
 
-def _gemma_response(content: str):
+def _Groq_response(content: str):
     resp = MagicMock()
     resp.json.return_value = {"choices": [{"message": {"content": content}}]}
     resp.raise_for_status.return_value = None
@@ -26,14 +26,14 @@ def test_analyze_image_parses_all_new_keys():
         "reason_for_store_selection": "Contains tabular financial data",
     })
     client = MagicMock()
-    client.__enter__.return_value.post.return_value = _gemma_response(payload)
+    client.__enter__.return_value.post.return_value = _Groq_response(payload)
     with patch.object(ias, "httpx") as httpx_mod:
         httpx_mod.Client.return_value = client
         with patch("app.config.settings") as s:
-            s.GEMMA4_BASE_URL = "http://gemma/v1"
-            s.GEMMA4_API_KEY = ""
-            s.GEMMA4_MODEL_NAME = "gemma-4-27b-it"
-            s.GEMMA4_TIMEOUT_SECONDS = 30
+            s.GROQ_BASE_URL = "http://Groq/v1"
+            s.GROQ_API_KEY = ""
+            s.GROQ_MODEL_NAME = "Groq-27b-it"
+            s.GROQ_TIMEOUT_SECONDS = 30
             out = ias.analyze_image(b"\x89PNG-fake", "Q1 100 Q2 200")
     assert out["structured_content"] == sc
     assert out["vlm_ocr_text"] == "Q1 100 Q2 200"
@@ -51,14 +51,14 @@ def test_analyze_image_vector_store_detection():
         "reason_for_store_selection": "Plain text content",
     })
     client = MagicMock()
-    client.__enter__.return_value.post.return_value = _gemma_response(payload)
+    client.__enter__.return_value.post.return_value = _Groq_response(payload)
     with patch.object(ias, "httpx") as httpx_mod:
         httpx_mod.Client.return_value = client
         with patch("app.config.settings") as s:
-            s.GEMMA4_BASE_URL = "http://gemma/v1"
-            s.GEMMA4_API_KEY = ""
-            s.GEMMA4_MODEL_NAME = "gemma-4-27b-it"
-            s.GEMMA4_TIMEOUT_SECONDS = 30
+            s.GROQ_BASE_URL = "http://Groq/v1"
+            s.GROQ_API_KEY = ""
+            s.GROQ_MODEL_NAME = "Groq-27b-it"
+            s.GROQ_TIMEOUT_SECONDS = 30
             out = ias.analyze_image(b"\x89PNG-fake", "some ocr text")
     assert out["detected_store"] == "vector_store"
     assert out["content_type"] == "text"
@@ -72,14 +72,14 @@ def test_analyze_image_clause_store_detection():
         "reason_for_store_selection": "Legal clause content",
     })
     client = MagicMock()
-    client.__enter__.return_value.post.return_value = _gemma_response(payload)
+    client.__enter__.return_value.post.return_value = _Groq_response(payload)
     with patch.object(ias, "httpx") as httpx_mod:
         httpx_mod.Client.return_value = client
         with patch("app.config.settings") as s:
-            s.GEMMA4_BASE_URL = "http://gemma/v1"
-            s.GEMMA4_API_KEY = ""
-            s.GEMMA4_MODEL_NAME = "gemma-4-27b-it"
-            s.GEMMA4_TIMEOUT_SECONDS = 30
+            s.GROQ_BASE_URL = "http://Groq/v1"
+            s.GROQ_API_KEY = ""
+            s.GROQ_MODEL_NAME = "Groq-27b-it"
+            s.GROQ_TIMEOUT_SECONDS = 30
             out = ias.analyze_image(b"\x89PNG-fake", "Clause 3.2")
     assert out["detected_store"] == "clause_store"
     assert out["content_type"] == "text"
@@ -92,7 +92,7 @@ def test_analyze_image_clause_store_detection():
 def test_analyze_image_no_endpoint_returns_fallback():
     raw_ocr = "some raw ocr text"
     with patch("app.config.settings") as s:
-        s.GEMMA4_BASE_URL = ""
+        s.GROQ_BASE_URL = ""
         out = ias.analyze_image(b"\x89PNG-fake", raw_ocr)
     assert out["structured_content"] == raw_ocr
     # A kept image stays searchable: OCR text routes to vector_store, not image_store.
@@ -104,7 +104,7 @@ def test_analyze_image_no_endpoint_returns_fallback():
 
 def test_analyze_image_no_endpoint_empty_ocr_returns_empty_structured_content():
     with patch("app.config.settings") as s:
-        s.GEMMA4_BASE_URL = ""
+        s.GROQ_BASE_URL = ""
         out = ias.analyze_image(b"\x89PNG-fake", "")
     assert out["structured_content"] == ""
     # No VLM decision AND no meaningful OCR text -> nothing searchable, so it stays a

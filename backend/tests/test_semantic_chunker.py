@@ -1,7 +1,7 @@
-"""
+﻿"""
 Tests for the semantic chunking pipeline introduced in Part 1.
 
-These tests inject a fake embedding function and a fake Gemma callable so
+These tests inject a fake embedding function and a fake Groq callable so
 that neither the 1.3 GB BGE model nor a live CDAC endpoint is required.
 All tests in this file run in normal (non-slow) mode.
 
@@ -26,14 +26,14 @@ from app.services.semantic_chunker import (
     _find_breakpoints,
     _merge_small_chunks,
     _parse_enrich_response,
-    enrich_chunks_with_gemma,
+    enrich_chunks_with_groq,
     split_sentences_semantically,
 )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Fake embedding helpers
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _unit_vec(v: list[float]) -> np.ndarray:
     """Return L2-normalised vector."""
@@ -42,19 +42,19 @@ def _unit_vec(v: list[float]) -> np.ndarray:
 
 
 def _orthogonal_pair() -> tuple[np.ndarray, np.ndarray]:
-    """Two orthogonal unit vectors — cosine distance == 1.0."""
+    """Two orthogonal unit vectors â€” cosine distance == 1.0."""
     return _unit_vec([1, 0, 0]), _unit_vec([0, 1, 0])
 
 
 def _identical_pair() -> tuple[np.ndarray, np.ndarray]:
-    """Two identical unit vectors — cosine distance == 0.0."""
+    """Two identical unit vectors â€” cosine distance == 0.0."""
     v = _unit_vec([1, 1, 0])
     return v, v.copy()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Unit tests: cosine distance
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class TestCosineDistance:
     def test_identical_vectors_are_zero(self):
@@ -71,9 +71,9 @@ class TestCosineDistance:
         assert _cosine_distance(a, b) == pytest.approx(2.0, abs=1e-6)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Unit tests: _find_breakpoints
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class TestFindBreakpoints:
     """Test the breakpoint detection with synthetic embeddings."""
@@ -98,9 +98,9 @@ class TestFindBreakpoints:
         assert bps == [0]
 
     def test_similar_sentences_no_extra_breakpoints(self):
-        """All embeddings nearly identical → distances all near 0 → percentile cut
-        is effectively 0 → every gap qualifies.  Instead, test with percentile=100
-        (never cut — need dist > threshold which is the maximum distance)."""
+        """All embeddings nearly identical â†’ distances all near 0 â†’ percentile cut
+        is effectively 0 â†’ every gap qualifies.  Instead, test with percentile=100
+        (never cut â€” need dist > threshold which is the maximum distance)."""
         # Three identical embeddings: no gap exceeds the 100th percentile threshold
         # (they're all equal) unless threshold = 0.
         v = _unit_vec([1, 0, 0])
@@ -111,31 +111,31 @@ class TestFindBreakpoints:
         # gap strictly exceeds zero, so we get only [0].
         bps = _find_breakpoints(sents, embed_fn, percentile=50)
         # All distances are 0; threshold = np.percentile([0,0], 50) = 0.
-        # We cut where dist >= threshold = 0 → every position. BUT the spec says
-        # "cut where distance EXCEEDS percentile threshold" — we use >=.
+        # We cut where dist >= threshold = 0 â†’ every position. BUT the spec says
+        # "cut where distance EXCEEDS percentile threshold" â€” we use >=.
         # With identical embeddings this does produce extra breakpoints, which is
         # correct (distance == threshold is a boundary condition).  The important
         # invariant: index 0 is always present.
         assert 0 in bps
 
     def test_dissimilar_at_one_gap_splits_there(self):
-        """Strong dissimilarity at gap 1 → breakpoint at sentence index 2."""
+        """Strong dissimilarity at gap 1 â†’ breakpoint at sentence index 2."""
         # Sentences 0+1 are similar (same direction), sentence 2 is orthogonal.
         v_a = _unit_vec([1, 0, 0])
         v_b = _unit_vec([1, 0.1, 0])
         v_c = _unit_vec([0, 0, 1])   # orthogonal to the first two
         sents = ["A.", "B.", "C."]
         embed_fn = self._make_embed_fn([v_a, v_b, v_c])
-        # distances: [dist(A,B)≈small, dist(B,C)≈large]
+        # distances: [dist(A,B)â‰ˆsmall, dist(B,C)â‰ˆlarge]
         bps = _find_breakpoints(sents, embed_fn, percentile=50)
-        # The gap between index 1 and 2 has the highest distance → cut at 2.
+        # The gap between index 1 and 2 has the highest distance â†’ cut at 2.
         assert 2 in bps
         assert 0 in bps  # always starts at 0
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Unit tests: split_sentences_semantically — breakpoints
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Unit tests: split_sentences_semantically â€” breakpoints
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class TestSplitSentencesSemantically:
     """Tests use a fake embed_fn so no model is loaded."""
@@ -197,8 +197,8 @@ class TestSplitSentencesSemantically:
 
     def test_max_token_guard_force_splits(self):
         """A group that exceeds max_tokens must be split into smaller pieces."""
-        # Single cluster (all similar) → no natural breakpoint,
-        # but max_tokens is tiny (2 tokens ≈ 2 words).
+        # Single cluster (all similar) â†’ no natural breakpoint,
+        # but max_tokens is tiny (2 tokens â‰ˆ 2 words).
         n = 10
         sents = ["word " * 20 for _ in range(n)]  # ~20 tokens each
         # All identical embeddings
@@ -208,7 +208,7 @@ class TestSplitSentencesSemantically:
         groups = split_sentences_semantically(
             sentences=sents,
             embed_fn=embed_fn,
-            percentile=99,       # very high threshold → no natural breakpoints
+            percentile=99,       # very high threshold â†’ no natural breakpoints
             max_tokens=25,       # each sentence is ~20 tokens; 2 together = 40 > 25
             min_tokens=0,
         )
@@ -223,7 +223,7 @@ class TestSplitSentencesSemantically:
 
     def test_min_size_merge(self):
         """Chunks below min_tokens should be merged into their neighbour."""
-        # cluster_ids: 3 distinct clusters → 3 natural groups
+        # cluster_ids: 3 distinct clusters â†’ 3 natural groups
         cluster_ids = [0, 1, 2]
         # Very short sentences (1 word each)
         sents = ["Hello.", "World.", "Python."]
@@ -234,9 +234,9 @@ class TestSplitSentencesSemantically:
             embed_fn=embed_fn,
             percentile=0,        # cut at every gap (low threshold)
             max_tokens=10_000,
-            min_tokens=5,        # 1-word sentences are below threshold → merge
+            min_tokens=5,        # 1-word sentences are below threshold â†’ merge
         )
-        # All tiny groups merged → should end up with fewer groups
+        # All tiny groups merged â†’ should end up with fewer groups
         for group in groups:
             combined_tokens = len(" ".join(group).split())
             # After merging, each surviving group should be >= min_tokens OR
@@ -244,9 +244,9 @@ class TestSplitSentencesSemantically:
             assert combined_tokens >= 5 or len(groups) == 1
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Unit tests: _enforce_max_tokens
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class TestEnforceMaxTokens:
     def test_within_limit_unchanged(self):
@@ -257,7 +257,7 @@ class TestEnforceMaxTokens:
         assert result == [group]
 
     def test_over_limit_splits(self):
-        # 10 sentences of 20 words each → 200 tokens total
+        # 10 sentences of 20 words each â†’ 200 tokens total
         sents = [f"Word " * 20 for _ in range(10)]
         # Make embeddings alternate between two clusters so there's a real cut point
         v0 = _unit_vec([1, 0])
@@ -271,9 +271,9 @@ class TestEnforceMaxTokens:
             assert len(" ".join(group).split()) <= 50 or len(group) == 1
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Unit tests: _merge_small_chunks
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class TestMergeSmallChunks:
     def test_no_change_when_all_large(self):
@@ -296,20 +296,20 @@ class TestMergeSmallChunks:
         assert "Hi." in result[0]
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Unit tests: Gemma enrichment + fallback
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Unit tests: Groq enrichment + fallback
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-class TestGemmaEnrichment:
-    """Test JSON parsing and fallback behaviour without a live Gemma endpoint."""
+class TestGroqEnrichment:
+    """Test JSON parsing and fallback behaviour without a live Groq endpoint."""
 
-    def _make_gemma_fn(self, response: str) -> Callable:
-        """Return a fake gemma_chat_fn that always returns ``response``."""
+    def _make_groq_fn(self, response: str) -> Callable:
+        """Return a fake groq_chat_fn that always returns ``response``."""
         def _chat(messages: list[dict], max_tokens: int, **kwargs) -> str:
             return response
         return _chat
 
-    # ── _parse_enrich_response ────────────────────────────────────────────────
+    # â”€â”€ _parse_enrich_response â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def test_parse_valid_response(self):
         data = [
@@ -340,7 +340,7 @@ class TestGemmaEnrichment:
         with pytest.raises(Exception):
             _parse_enrich_response("not-json-at-all", n=1)
 
-    # ── enrich_chunks_with_gemma ──────────────────────────────────────────────
+    # â”€â”€ enrich_chunks_with_groq â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     def test_enrich_happy_path(self):
         chunk_texts = ["Chunk one text.", "Chunk two text."]
@@ -350,24 +350,24 @@ class TestGemmaEnrichment:
             {"section_title": "Intro", "keywords": ["rag"], "semantic_type": "paragraph"},
             {"section_title": "Body", "keywords": ["llm"], "semantic_type": "paragraph"},
         ]
-        gemma_fn = self._make_gemma_fn(json.dumps(resp_data))
-        result = enrich_chunks_with_gemma(
+        groq_fn = self._make_groq_fn(json.dumps(resp_data))
+        result = enrich_chunks_with_groq(
             chunk_texts, section_paths, block_types,
-            gemma_chat_fn=gemma_fn, batch_size=8,
+            groq_chat_fn=groq_fn, batch_size=8,
         )
         assert len(result) == 2
         assert result[0]["section_title"] == "Intro"
         assert result[1]["keywords"] == ["llm"]
 
-    def test_fallback_on_malformed_gemma_response(self):
-        """If Gemma returns bad JSON, enrich_chunks_with_gemma must not raise."""
+    def test_fallback_on_malformed_Groq_response(self):
+        """If Groq returns bad JSON, enrich_chunks_with_groq must not raise."""
         chunk_texts = ["Text A.", "Text B."]
         section_paths = [["Sec 1"], []]
         block_types = [["paragraph"], ["list"]]
-        gemma_fn = self._make_gemma_fn("INVALID JSON {{")
-        result = enrich_chunks_with_gemma(
+        groq_fn = self._make_groq_fn("INVALID JSON {{")
+        result = enrich_chunks_with_groq(
             chunk_texts, section_paths, block_types,
-            gemma_chat_fn=gemma_fn, batch_size=8,
+            groq_chat_fn=groq_fn, batch_size=8,
         )
         assert len(result) == 2
         # Fallback sets section_title from breadcrumb
@@ -378,18 +378,18 @@ class TestGemmaEnrichment:
         # Fallback detects list type
         assert result[1]["semantic_type"] == "list"
 
-    def test_fallback_on_gemma_exception(self):
-        """If Gemma raises (e.g. HTTP error), fallback must kick in."""
+    def test_fallback_on_Groq_exception(self):
+        """If Groq raises (e.g. HTTP error), fallback must kick in."""
         chunk_texts = ["Text X."]
         section_paths = [["My Section"]]
         block_types = [["paragraph"]]
 
-        def _exploding_gemma(**kwargs):
+        def _exploding_groq(**kwargs):
             raise RuntimeError("CDAC endpoint down")
 
-        result = enrich_chunks_with_gemma(
+        result = enrich_chunks_with_groq(
             chunk_texts, section_paths, block_types,
-            gemma_chat_fn=_exploding_gemma, batch_size=8,
+            groq_chat_fn=_exploding_groq, batch_size=8,
         )
         assert len(result) == 1
         assert result[0]["section_title"] == "My Section"
@@ -397,10 +397,10 @@ class TestGemmaEnrichment:
         assert result[0]["semantic_type"] == "paragraph"
 
     def test_batching_splits_into_multiple_calls(self):
-        """batch_size=2 with 5 chunks should result in 3 Gemma calls."""
+        """batch_size=2 with 5 chunks should result in 3 Groq calls."""
         call_count = {"n": 0}
 
-        def _counting_gemma(messages, max_tokens, **kwargs):
+        def _counting_groq(messages, max_tokens, **kwargs):
             call_count["n"] += 1
             # Figure out how many chunks are in this batch from the prompt
             prompt = messages[0]["content"]
@@ -416,27 +416,27 @@ class TestGemmaEnrichment:
         section_paths = [[] for _ in range(5)]
         block_types = [["paragraph"] for _ in range(5)]
 
-        result = enrich_chunks_with_gemma(
+        result = enrich_chunks_with_groq(
             chunk_texts, section_paths, block_types,
-            gemma_chat_fn=_counting_gemma, batch_size=2,
+            groq_chat_fn=_counting_groq, batch_size=2,
         )
         assert call_count["n"] == 3   # ceil(5/2) = 3
         assert len(result) == 5
 
     def test_empty_input_returns_empty(self):
-        gemma_fn = self._make_gemma_fn("[]")
-        result = enrich_chunks_with_gemma(
-            [], [], [], gemma_chat_fn=gemma_fn, batch_size=8,
+        groq_fn = self._make_groq_fn("[]")
+        result = enrich_chunks_with_groq(
+            [], [], [], groq_chat_fn=groq_fn, batch_size=8,
         )
         assert result == []
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Integration-ish: chunk_document uses semantic path (model-free via monkeypatch)
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class TestChunkDocumentSemanticPath:
-    """Verify the full chunk_document() pipeline runs with a fake embed + Gemma."""
+    """Verify the full chunk_document() pipeline runs with a fake embed + Groq."""
 
     def _make_doc(self, blocks: list[tuple[str, str]]):
         from app.models.document import ParsedDocument, TextBlock
@@ -457,7 +457,7 @@ class TestChunkDocumentSemanticPath:
         )
 
     def test_semantic_path_produces_chunks_with_enrichment(self, monkeypatch):
-        """Full pipeline: fake BGE + fake Gemma → Chunk objects with metadata."""
+        """Full pipeline: fake BGE + fake Groq â†’ Chunk objects with metadata."""
         import app.services.semantic_chunker as sc
 
         # Fake embed: each sentence maps to a unique dimension (orthogonal)
@@ -471,8 +471,8 @@ class TestChunkDocumentSemanticPath:
             norms = np.linalg.norm(arr, axis=1, keepdims=True)
             return arr / np.maximum(norms, 1e-9)
 
-        # Fake Gemma: always returns valid JSON aligned to the batch
-        def _fake_gemma(messages: list[dict], max_tokens: int, **kwargs) -> str:
+        # Fake Groq: always returns valid JSON aligned to the batch
+        def _fake_groq(messages: list[dict], max_tokens: int, **kwargs) -> str:
             prompt = messages[0]["content"]
             n_sep = prompt.count("<CHUNK_SEP>")
             n = n_sep + 1
@@ -486,11 +486,11 @@ class TestChunkDocumentSemanticPath:
             ]
             return json.dumps(data)
 
-        # Monkeypatch embed_passages and gemma_client.chat
+        # Monkeypatch embed_passages and groq_client.chat
         monkeypatch.setattr(
             "app.services.embedding_service.embed_passages", _fake_embed
         )
-        monkeypatch.setattr("app.services.gemma_client.chat", _fake_gemma)
+        monkeypatch.setattr("app.services.groq_client.chat", _fake_groq)
         # Ensure semantic path is active
         monkeypatch.setattr("app.config.settings.CHUNK_USE_SEMANTIC", True)
 
@@ -508,7 +508,7 @@ class TestChunkDocumentSemanticPath:
             assert c.chunk_text.strip()
             assert c.chunk_index >= 0
             assert c.page_number >= 1
-            # Gemma-enriched fields should be non-empty
+            # Groq-enriched fields should be non-empty
             assert c.section_title is not None or True  # may be None for header-less docs
             assert isinstance(c.keywords, list)
             assert c.semantic_type in {
@@ -541,7 +541,7 @@ class TestChunkDocumentSemanticPath:
         import app.services.semantic_chunker as sc
 
         # Embeddings that force a split between sentence 1 and 2
-        # Cluster 0: sents 0,1 → cluster 1: sents 2,3
+        # Cluster 0: sents 0,1 â†’ cluster 1: sents 2,3
         v0 = _unit_vec([1, 0, 0])
         v1 = _unit_vec([0, 1, 0])
         cluster_map = [v0, v0, v1, v1]
@@ -549,7 +549,7 @@ class TestChunkDocumentSemanticPath:
         def _fake_embed(sentences: list[str]) -> np.ndarray:
             return np.stack(cluster_map[: len(sentences)])
 
-        def _fake_gemma(messages, max_tokens, **kwargs):
+        def _fake_groq(messages, max_tokens, **kwargs):
             prompt = messages[0]["content"]
             n = prompt.count("<CHUNK_SEP>") + 1
             data = [
@@ -559,7 +559,7 @@ class TestChunkDocumentSemanticPath:
             return json.dumps(data)
 
         monkeypatch.setattr("app.services.embedding_service.embed_passages", _fake_embed)
-        monkeypatch.setattr("app.services.gemma_client.chat", _fake_gemma)
+        monkeypatch.setattr("app.services.groq_client.chat", _fake_groq)
         monkeypatch.setattr("app.config.settings.CHUNK_USE_SEMANTIC", True)
         monkeypatch.setattr("app.config.settings.CHUNK_SEMANTIC_BREAKPOINT_PERCENTILE", 50)
         monkeypatch.setattr("app.config.settings.CHUNK_MAX_TOKENS", 10_000)
@@ -584,9 +584,9 @@ class TestChunkDocumentSemanticPath:
             assert text_i != text_next
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Slow tests (require real BGE model — excluded by default)
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Slow tests (require real BGE model â€” excluded by default)
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @pytest.mark.slow
 class TestRealEmbeddingsBreakpoints:
@@ -615,5 +615,5 @@ class TestRealEmbeddingsBreakpoints:
             max_tokens=10_000,
             min_tokens=0,
         )
-        # There must be a split — the two topics should land in separate groups
+        # There must be a split â€” the two topics should land in separate groups
         assert len(groups) >= 2

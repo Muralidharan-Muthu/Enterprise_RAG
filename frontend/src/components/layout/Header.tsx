@@ -57,7 +57,7 @@ export function Header() {
             <span className="text-slate-300 dark:text-zinc-700 text-xs">•</span>
             <HealthPill
               label="Groq"
-              status={health.groq_endpoint || health.gemma_endpoint}
+              status={health.groq_endpoint || health.groq_endpoint}
               icon={Cpu}
             />
             <span className="text-slate-300 dark:text-zinc-700 text-xs">•</span>

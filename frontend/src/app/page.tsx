@@ -281,7 +281,7 @@ export default function LandingPage() {
             </div>
             <p className="text-sm text-gray-400 leading-relaxed mb-4">
               Crops charts, diagrams, and visual tables directly from PDF pages. Synthesizes visual descriptions
-              via Google Gemma 4 VLM and extracts OCR text for visual grounding and exact figure citations.
+              via Groq VLM and extracts OCR text for visual grounding and exact figure citations.
             </p>
             <div className="text-xs font-mono text-pink-400/80 flex items-center gap-2">
               <CheckCircle2 className="w-3.5 h-3.5" />

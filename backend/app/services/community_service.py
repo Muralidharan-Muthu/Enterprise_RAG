@@ -85,7 +85,7 @@ def recompute_communities(level_summaries: bool = True) -> int:
         # Decide which communities are worth an LLM summary. Only communities
         # with >= MIN_SIZE members qualify, and at most MAX_SUMMARIES of them
         # (largest first). Everything else gets a cheap member-list summary with
-        # NO Gemma call — this is what stops a fragmented partition (hundreds of
+        # NO Groq call — this is what stops a fragmented partition (hundreds of
         # singleton/pair communities) from firing one chat/completions per node.
         min_size = settings.GRAPHRAG_COMMUNITY_MIN_SIZE
         max_summaries = settings.GRAPHRAG_COMMUNITY_MAX_SUMMARIES
@@ -94,18 +94,18 @@ def recompute_communities(level_summaries: bool = True) -> int:
             key=lambda c: len(community_members.get(c, [])),
             reverse=True,
         )
-        gemma_targets = {
+        groq_targets = {
             cid for cid in ranked
             if len(community_members.get(cid, [])) >= min_size
         }
         if max_summaries > 0:
-            gemma_targets = set(
-                [c for c in ranked if c in gemma_targets][:max_summaries]
+            groq_targets = set(
+                [c for c in ranked if c in groq_targets][:max_summaries]
             )
         logger.info(
             "recompute_communities: %d/%d communities qualify for LLM summary "
             "(min_size=%d, cap=%d); the rest get cheap summaries",
-            len(gemma_targets), len(community_ids), min_size, max_summaries,
+            len(groq_targets), len(community_ids), min_size, max_summaries,
         )
 
         summaries: dict = {}
@@ -113,7 +113,7 @@ def recompute_communities(level_summaries: bool = True) -> int:
             members = community_members.get(cid, [])
             try:
                 summary_info = _summarize_community(
-                    cid, members, edges, use_gemma=cid in gemma_targets,
+                    cid, members, edges, use_groq=cid in groq_targets,
                 )
                 if level_summaries and summary_info.get("summary"):
                     # Optionally embed the summary
@@ -206,7 +206,7 @@ def _detect_communities(nodes: list[str], edges: list[tuple]) -> dict[str, int]:
 # ── Community summarization ───────────────────────────────────────────────────
 
 def _cheap_summary(community_id: int, member_keys: list[str]) -> dict:
-    """Non-LLM summary for trivial/low-priority communities. No Gemma call."""
+    """Non-LLM summary for trivial/low-priority communities. No Groq call."""
     return {
         "title": f"Community {community_id}",
         "summary": f"Contains {len(member_keys)} related entities: "
@@ -218,11 +218,11 @@ def _summarize_community(
     community_id: int,
     member_keys: list[str],
     edges: list[tuple],
-    use_gemma: bool = True,
+    use_groq: bool = True,
 ) -> dict:
-    """Summarize a community. Uses Gemma when use_gemma is True and Gemma is
+    """Summarize a community. Uses Groq when use_groq is True and Groq is
     configured; otherwise returns a cheap member-list summary (no LLM call)."""
-    if not use_gemma or not settings.GEMMA4_BASE_URL:
+    if not use_groq or not settings.GROQ_BASE_URL:
         return _cheap_summary(community_id, member_keys)
 
     # Build a short context: member names + relationships between them
@@ -249,7 +249,7 @@ def _summarize_community(
     )
 
     try:
-        from app.services.gemma_client import chat
+        from app.services.groq_client import chat
         raw = chat(
             messages=[{"role": "user", "content": prompt}],
             max_tokens=200,
@@ -270,7 +270,7 @@ def _summarize_community(
         return {"title": title or f"Community {community_id}", "summary": summary}
 
     except Exception as exc:
-        logger.warning("Community %d summarization via Gemma failed: %s", community_id, exc)
+        logger.warning("Community %d summarization via Groq failed: %s", community_id, exc)
         return {
             "title": f"Community {community_id}",
             "summary": f"Contains {len(member_keys)} related entities: {members_text[:200]}",

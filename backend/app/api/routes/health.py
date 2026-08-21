@@ -37,8 +37,8 @@ def _check_neo4j() -> str:
  
  
 def _check_groq() -> str:
-    base_url = settings.GROQ_BASE_URL or settings.GEMMA4_BASE_URL
-    api_key = settings.GROQ_API_KEY or settings.GEMMA4_API_KEY
+    base_url = settings.GROQ_BASE_URL or settings.GROQ_BASE_URL
+    api_key = settings.GROQ_API_KEY or settings.GROQ_API_KEY
     if not base_url or not api_key:
         return "not_configured"
     try:
@@ -66,7 +66,7 @@ def health_check():
         else "degraded"
     )
  
-    llm_model = settings.GROQ_MODEL_NAME or settings.GEMMA4_MODEL_NAME
+    llm_model = settings.GROQ_MODEL_NAME
  
     return HealthResponse(
         status=overall,
@@ -74,11 +74,9 @@ def health_check():
         database=db_status,
         redis=redis_status,
         groq_endpoint=groq_status,
-        gemma_endpoint=groq_status,
         neo4j=neo4j_status,
         timestamp=datetime.now(timezone.utc),
         embedding_model=settings.BGE_MODEL_NAME.split("/")[-1],
         reranker_name=settings.RERANKER_NAME.split("/")[-1],
         groq_model=llm_model,
-        gemma_model=llm_model,
     )

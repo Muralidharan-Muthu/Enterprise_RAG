@@ -24,7 +24,7 @@ from app.services.store_router import build_vlm_schema_block
 # ---------------------------------------------------------------------------
 
 
-def _gemma_response(content: str):
+def _Groq_response(content: str):
     """Build a minimal mock httpx response that returns *content* as VLM text."""
     resp = MagicMock()
     resp.json.return_value = {"choices": [{"message": {"content": content}}]}
@@ -35,18 +35,18 @@ def _gemma_response(content: str):
 def _patch_httpx(response_content: str):
     """Context manager: patches ias.httpx so the VLM returns *response_content*."""
     client = MagicMock()
-    client.__enter__.return_value.post.return_value = _gemma_response(response_content)
+    client.__enter__.return_value.post.return_value = _Groq_response(response_content)
     return patch.object(ias, "httpx", **{"Client.return_value": client})
 
 
-def _settings_ctx(base_url="http://gemma/v1"):
+def _settings_ctx(base_url="http://Groq/v1"):
     """Patch app.config.settings with minimal VLM config."""
     return patch(
         "app.config.settings",
-        GEMMA4_BASE_URL=base_url,
-        GEMMA4_API_KEY="",
-        GEMMA4_MODEL_NAME="gemma-4-27b-it",
-        GEMMA4_TIMEOUT_SECONDS=30,
+        GROQ_BASE_URL=base_url,
+        GROQ_API_KEY="",
+        GROQ_MODEL_NAME="Groq-27b-it",
+        GROQ_TIMEOUT_SECONDS=30,
     )
 
 
@@ -204,7 +204,7 @@ class TestAnalyzeImageTableStoreJsonObject:
 
     def test_detected_store_is_table_store(self):
         client = MagicMock()
-        client.__enter__.return_value.post.return_value = _gemma_response(self._vlm_payload())
+        client.__enter__.return_value.post.return_value = _Groq_response(self._vlm_payload())
         with patch.object(ias, "httpx", **{"Client.return_value": client}):
             with _settings_ctx():
                 out = ias.analyze_image(b"\x89PNG", "Q1 100 Q2 200")
@@ -213,7 +213,7 @@ class TestAnalyzeImageTableStoreJsonObject:
     def test_structured_content_is_json_string(self):
         """structured_content must be a JSON string (not a dict) for downstream parsers."""
         client = MagicMock()
-        client.__enter__.return_value.post.return_value = _gemma_response(self._vlm_payload())
+        client.__enter__.return_value.post.return_value = _Groq_response(self._vlm_payload())
         with patch.object(ias, "httpx", **{"Client.return_value": client}):
             with _settings_ctx():
                 out = ias.analyze_image(b"\x89PNG", "Q1 100 Q2 200")
@@ -224,7 +224,7 @@ class TestAnalyzeImageTableStoreJsonObject:
     def test_structured_content_round_trips_to_original_object(self):
         """json.loads(structured_content) must equal the original dict the VLM returned."""
         client = MagicMock()
-        client.__enter__.return_value.post.return_value = _gemma_response(self._vlm_payload())
+        client.__enter__.return_value.post.return_value = _Groq_response(self._vlm_payload())
         with patch.object(ias, "httpx", **{"Client.return_value": client}):
             with _settings_ctx():
                 out = ias.analyze_image(b"\x89PNG", "Q1 100 Q2 200")
@@ -233,7 +233,7 @@ class TestAnalyzeImageTableStoreJsonObject:
 
     def test_content_type_is_table(self):
         client = MagicMock()
-        client.__enter__.return_value.post.return_value = _gemma_response(self._vlm_payload())
+        client.__enter__.return_value.post.return_value = _Groq_response(self._vlm_payload())
         with patch.object(ias, "httpx", **{"Client.return_value": client}):
             with _settings_ctx():
                 out = ias.analyze_image(b"\x89PNG", "Q1 100 Q2 200")
@@ -241,7 +241,7 @@ class TestAnalyzeImageTableStoreJsonObject:
 
     def test_confidence_and_reason_preserved(self):
         client = MagicMock()
-        client.__enter__.return_value.post.return_value = _gemma_response(self._vlm_payload())
+        client.__enter__.return_value.post.return_value = _Groq_response(self._vlm_payload())
         with patch.object(ias, "httpx", **{"Client.return_value": client}):
             with _settings_ctx():
                 out = ias.analyze_image(b"\x89PNG", "Q1 100 Q2 200")
@@ -285,7 +285,7 @@ class TestAnalyzeImageDocumentStore:
 
     def test_detected_store_is_document_store(self):
         client = MagicMock()
-        client.__enter__.return_value.post.return_value = _gemma_response(self._vlm_payload())
+        client.__enter__.return_value.post.return_value = _Groq_response(self._vlm_payload())
         with patch.object(ias, "httpx", **{"Client.return_value": client}):
             with _settings_ctx():
                 out = ias.analyze_image(b"\x89PNG", "")
@@ -293,7 +293,7 @@ class TestAnalyzeImageDocumentStore:
 
     def test_content_type_is_text(self):
         client = MagicMock()
-        client.__enter__.return_value.post.return_value = _gemma_response(self._vlm_payload())
+        client.__enter__.return_value.post.return_value = _Groq_response(self._vlm_payload())
         with patch.object(ias, "httpx", **{"Client.return_value": client}):
             with _settings_ctx():
                 out = ias.analyze_image(b"\x89PNG", "")
@@ -302,7 +302,7 @@ class TestAnalyzeImageDocumentStore:
     def test_structured_content_round_trips_to_document_schema(self):
         """structured_content JSON string must round-trip back to the document dict."""
         client = MagicMock()
-        client.__enter__.return_value.post.return_value = _gemma_response(self._vlm_payload())
+        client.__enter__.return_value.post.return_value = _Groq_response(self._vlm_payload())
         with patch.object(ias, "httpx", **{"Client.return_value": client}):
             with _settings_ctx():
                 out = ias.analyze_image(b"\x89PNG", "")
@@ -313,7 +313,7 @@ class TestAnalyzeImageDocumentStore:
 
     def test_confidence_preserved(self):
         client = MagicMock()
-        client.__enter__.return_value.post.return_value = _gemma_response(self._vlm_payload())
+        client.__enter__.return_value.post.return_value = _Groq_response(self._vlm_payload())
         with patch.object(ias, "httpx", **{"Client.return_value": client}):
             with _settings_ctx():
                 out = ias.analyze_image(b"\x89PNG", "")
@@ -326,12 +326,12 @@ class TestAnalyzeImageDocumentStore:
 
 
 class TestAnalyzeImageFallback:
-    """When GEMMA4_BASE_URL is empty, analyze_image still keeps the kept image
+    """When GROQ_BASE_URL is empty, analyze_image still keeps the kept image
     searchable: it routes the raw OCR text to vector_store (never image_store,
     which is a pure repository for skipped images)."""
 
     def test_returns_vector_store(self):
-        with patch("app.config.settings", GEMMA4_BASE_URL=""):
+        with patch("app.config.settings", GROQ_BASE_URL=""):
             out = ias.analyze_image(b"\x89PNG", "ocr text here")
         assert out["detected_store"] == "vector_store"
         assert out["confidence"] == 0.0
@@ -339,17 +339,17 @@ class TestAnalyzeImageFallback:
 
     def test_structured_content_is_raw_ocr(self):
         raw_ocr = "fallback ocr text"
-        with patch("app.config.settings", GEMMA4_BASE_URL=""):
+        with patch("app.config.settings", GROQ_BASE_URL=""):
             out = ias.analyze_image(b"\x89PNG", raw_ocr)
         assert out["structured_content"] == raw_ocr
 
     def test_vlm_ocr_text_is_empty(self):
-        with patch("app.config.settings", GEMMA4_BASE_URL=""):
+        with patch("app.config.settings", GROQ_BASE_URL=""):
             out = ias.analyze_image(b"\x89PNG", "some ocr")
         assert out["vlm_ocr_text"] == ""
 
     def test_all_required_keys_present(self):
-        with patch("app.config.settings", GEMMA4_BASE_URL=""):
+        with patch("app.config.settings", GROQ_BASE_URL=""):
             out = ias.analyze_image(b"\x89PNG", "")
         expected_keys = {
             "structured_content",
@@ -381,7 +381,7 @@ class TestAnalyzeImageStringStructuredContent:
 
     def test_string_structured_content_preserved(self):
         client = MagicMock()
-        client.__enter__.return_value.post.return_value = _gemma_response(self._vlm_payload())
+        client.__enter__.return_value.post.return_value = _Groq_response(self._vlm_payload())
         with patch.object(ias, "httpx", **{"Client.return_value": client}):
             with _settings_ctx():
                 out = ias.analyze_image(b"\x89PNG", "data governance")

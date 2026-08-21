@@ -47,51 +47,51 @@ def test_extract_entities_empty_text_returns_empty():
 
 
 def test_extract_entities_falls_back_when_no_endpoint():
-    with patch.object(es.settings, "GEMMA4_BASE_URL", ""):
+    with patch.object(es.settings, "GROQ_BASE_URL", ""):
         ents = es.extract_entities("Acme Corporation and Globex Industries.")
     names = {e["name"] for e in ents}
     assert "Acme Corporation" in names
 
 
-def test_parse_gemma_entities_reads_json():
+def test_parse_Groq_entities_reads_json():
     raw = '```json\n{"entities": [{"name": "Acme Corp", "type": "org"}, {"name": "London", "type": "location"}]}\n```'
-    out = es._parse_gemma_entities(raw)
+    out = es._parse_Groq_entities(raw)
     assert {"name": "Acme Corp", "type": "org"} in out
     assert any(e["type"] == "location" for e in out)
 
 
-def test_parse_gemma_entities_dedupes_and_skips_blank():
+def test_parse_Groq_entities_dedupes_and_skips_blank():
     raw = '{"entities": [{"name": "Acme", "type": "org"}, {"name": "acme", "type": "org"}, {"name": "", "type": "x"}]}'
-    out = es._parse_gemma_entities(raw)
+    out = es._parse_Groq_entities(raw)
     assert len(out) == 1
 
 
-def test_parse_gemma_entities_bad_json_returns_none():
-    assert es._parse_gemma_entities("not json at all") is None
+def test_parse_Groq_entities_bad_json_returns_none():
+    assert es._parse_Groq_entities("not json at all") is None
 
 
-def test_parse_gemma_entities_empty_list_is_valid_not_none():
-    # Gemma correctly finding zero entities is a valid answer, not a failure.
-    out = es._parse_gemma_entities('{"entities": []}')
+def test_parse_Groq_entities_empty_list_is_valid_not_none():
+    # Groq correctly finding zero entities is a valid answer, not a failure.
+    out = es._parse_Groq_entities('{"entities": []}')
     assert out == []
     assert out is not None
 
 
-def test_extract_entities_accepts_legitimate_empty_gemma_result():
+def test_extract_entities_accepts_legitimate_empty_Groq_result():
     # Regression: extract_entities used to check `if parsed:` (truthy), which is
     # False for both None (real failure) and [] (valid "no entities found"), so a
     # correct empty answer wrongly fell through to the noisy regex fallback and
     # invented pseudo-entities from capitalized phrases (e.g. "FY 2023-24") in
     # text that has no real named entities. It must now trust an explicit [].
-    with patch.object(es.settings, "GEMMA4_BASE_URL", "http://x"), \
-         patch.object(es, "_call_gemma_ner", return_value=[]):
+    with patch.object(es.settings, "GROQ_BASE_URL", "http://x"), \
+         patch.object(es, "_call_Groq_ner", return_value=[]):
         ents = es.extract_entities("Q1 Planned Revenue was 950.00 for FY 2023-24.")
     assert ents == []
 
 
 def test_extract_entities_falls_back_only_on_genuine_parse_failure():
-    with patch.object(es.settings, "GEMMA4_BASE_URL", "http://x"), \
-         patch.object(es, "_call_gemma_ner", return_value=None):
+    with patch.object(es.settings, "GROQ_BASE_URL", "http://x"), \
+         patch.object(es, "_call_Groq_ner", return_value=None):
         ents = es.extract_entities("Acme Corporation and Globex Industries.")
     names = {e["name"] for e in ents}
     assert "Acme Corporation" in names

@@ -352,10 +352,11 @@ def _merge_small_chunks(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Gemma enrichment
+# ─────────────────────────────────────────────────────────────────────────────
+# Groq enrichment
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Strict JSON prompt — Gemma must return an array aligned to the input chunks.
+# Strict JSON prompt — Groq must return an array aligned to the input chunks.
 _ENRICH_PROMPT_TMPL = (
     "You are a document metadata extractor. You will be given {n} text chunks "
     "from a single document, separated by the marker <CHUNK_SEP>. "
@@ -377,7 +378,7 @@ def _build_enrich_prompt(chunk_texts: list[str]) -> str:
 
 
 def _parse_enrich_response(raw: str, n: int) -> list[dict]:
-    """Parse Gemma's JSON response.  Returns a list of dicts or raises ValueError."""
+    """Parse Groq's JSON response.  Returns a list of dicts or raises ValueError."""
     # Strip markdown code fences if the model wraps in ```json ... ```
     raw = raw.strip()
     raw = re.sub(r'^```(?:json)?\s*', '', raw)
@@ -405,7 +406,7 @@ def _fallback_enrichment(
     section_paths: list[list[str]],
     block_types_list: list[list[str]],
 ) -> list[dict]:
-    """Heuristic enrichment used when Gemma is unavailable or returns bad JSON."""
+    """Heuristic enrichment used when Groq is unavailable or returns bad JSON."""
     result = []
     for i, text in enumerate(chunk_texts):
         path = section_paths[i] if i < len(section_paths) else []
@@ -425,24 +426,24 @@ def _fallback_enrichment(
     return result
 
 
-def enrich_chunks_with_gemma(
+def enrich_chunks_with_groq(
     chunk_texts: list[str],
     section_paths: list[list[str]],
     block_types_list: list[list[str]],
-    gemma_chat_fn: Callable,
+    groq_chat_fn: Callable,
     batch_size: int,
     max_tokens: int = 600,
 ) -> list[dict]:
-    """Batch-enrich chunks via Gemma; falls back gracefully on any failure.
+    """Batch-enrich chunks via Groq; falls back gracefully on any failure.
 
     Args:
         chunk_texts:      List of chunk content strings (core text, no prefix).
         section_paths:    Parallel list of section path lists (for fallback titles).
         block_types_list: Parallel list of block-type lists (for fallback types).
-        gemma_chat_fn:    Callable matching gemma_client.chat() signature:
+        groq_chat_fn:     Callable matching groq_client.chat() signature:
                           ``(messages: list[dict], max_tokens: int) -> str``.
-        batch_size:       Maximum number of chunks per Gemma call.
-        max_tokens:       Max tokens in Gemma's JSON response.
+        batch_size:       Maximum number of chunks per Groq call.
+        max_tokens:       Max tokens in Groq's JSON response.
 
     Returns:
         List of dicts with keys ``section_title``, ``keywords``, ``semantic_type``.
@@ -464,16 +465,16 @@ def enrich_chunks_with_gemma(
         try:
             prompt = _build_enrich_prompt(batch_texts)
             messages = [{"role": "user", "content": prompt}]
-            raw = gemma_chat_fn(messages=messages, max_tokens=max_tokens)
+            raw = groq_chat_fn(messages=messages, max_tokens=max_tokens)
             enriched = _parse_enrich_response(raw, n_batch)
             all_enriched.extend(enriched)
             logger.debug(
-                "Gemma enriched batch [%d:%d] (%d chunks)",
+                "Groq enriched batch [%d:%d] (%d chunks)",
                 batch_start, batch_end, n_batch,
             )
         except Exception as exc:
             logger.warning(
-                "Gemma enrichment failed for batch [%d:%d] — using heuristics: %s",
+                "Groq enrichment failed for batch [%d:%d] — using heuristics: %s",
                 batch_start, batch_end, exc,
             )
             all_enriched.extend(
@@ -481,3 +482,7 @@ def enrich_chunks_with_gemma(
             )
 
     return all_enriched
+
+
+# Backward-compat alias
+enrich_chunks_with_gemma = enrich_chunks_with_groq

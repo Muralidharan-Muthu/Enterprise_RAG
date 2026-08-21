@@ -365,9 +365,9 @@ def chunk_embed_store_task(self, prev: dict, document_id: str, job_id: str) -> d
         chunks = chunk_document(parsed_doc, router_result.document_type)
         legal_clauses = None
         if router_result.document_type == "legal":
-            from app.services.gemma_clause_extractor import extract_clauses_gemma
+            from app.services.groq_clause_extractor import extract_clauses_groq
             job_repo.update_job(job_id, "chunking", progress=30)
-            legal_clauses, _extraction_meta = extract_clauses_gemma(parsed_doc)
+            legal_clauses, _extraction_meta = extract_clauses_groq(parsed_doc)
             logger.info(
                 "[%s] Clause extraction: %d clauses, source=%s%s",
                 document_id, len(legal_clauses), _extraction_meta.source,

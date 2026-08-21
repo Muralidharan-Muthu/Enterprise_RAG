@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import json as _json
 import time
 import logging
@@ -34,9 +34,9 @@ _VALID_DOC_TYPES = {"policy", "financial", "legal", "entity", "research"}
 
 
 class TableFilterRequest(BaseModel):
-    """Optional structured prefilter for table_store search (Slice 4 — hybrid
+    """Optional structured prefilter for table_store search (Slice 4 â€” hybrid
     metadata-filtered table retrieval). All fields optional; omitting the whole
-    object (or leaving every field None/False) is a no-op — identical
+    object (or leaving every field None/False) is a no-op â€” identical
     retrieval behavior to before this model existed."""
     currency: Optional[str] = None
     fiscal_year: Optional[str] = None
@@ -67,7 +67,7 @@ class QueryRequest(BaseModel):
     use_reranker: bool = True
     # Slice 4 (optional, additive): structured table_store prefilter. Consumed
     # by both the classic path (retriever_service.retrieve) and the agentic path
-    # (agentic_pipeline.run) — threaded through both call sites below.
+    # (agentic_pipeline.run) â€” threaded through both call sites below.
     table_filters: Optional[TableFilterRequest] = None
     enable_hybrid: Optional[bool] = None
     enable_graphrag: Optional[bool] = None
@@ -83,7 +83,7 @@ class CitationItem(BaseModel):
     # Multi-page continuation tables (Phase 1 merge + hybrid-retrieval Phase 2
     # threading): the last page a table row-window spans, when different from
     # page_number (the start page). None for every non-table citation and for
-    # ordinary single-page table windows — backward-compatible default.
+    # ordinary single-page table windows â€” backward-compatible default.
     page_number_end: Optional[int] = None
     section_title: Optional[str] = None
     clause_type: Optional[str] = None
@@ -115,7 +115,7 @@ def _rank_chunks(query: str, retrieved: list, top_k: int, use_reranker: bool,
     return retriever_service.rrf_merge(pool)[:top_k], len(pool)
 
 
-# ── Adaptive retrieval planning ───────────────────────────────────────────
+# â”€â”€ Adaptive retrieval planning â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Cheap string heuristic (no extra embedding/LLM call) that scales retrieval
 # depth to query complexity: a short, single-fact question doesn't need the
 # same top_k_per_store as "compare X and Y across all documents".
@@ -144,7 +144,7 @@ def _resolve_retrieval_params(query: str) -> tuple[int, int]:
 
 
 async def _resolve_graph_mode(query: str, document_id: Optional[str]) -> str:
-    """GraphRAG availability+routing decision, independent of retrieval — has
+    """GraphRAG availability+routing decision, independent of retrieval â€” has
     no data dependency on `retrieved`, so callers run this concurrently with
     retrieval via asyncio.gather() instead of awaiting it afterward."""
     if not settings.GRAPHRAG_ENABLED or document_id:
@@ -223,8 +223,8 @@ class QueryResponse(BaseModel):
     answer: str
     confidence: float
     # Additive: breaks "confidence" down into its weighted components (retrieval
-    # signal vs. Gemma's self-rating, or just retrieval when no Gemma rating
-    # exists — see synthesis_service.retrieval_confidence_breakdown /
+    # signal vs. Groq's self-rating, or just retrieval when no Groq rating
+    # exists â€” see synthesis_service.retrieval_confidence_breakdown /
     # _blended_breakdown / blended_confidence_for_stream). None only if
     # synthesis raised before a breakdown could be built.
     confidence_breakdown: Optional[dict] = None
@@ -238,10 +238,10 @@ class QueryResponse(BaseModel):
     # (SUM/AVG/COUNT/MIN/MAX or exact row/column lookup), populated only when
     # STRUCTURED_QUERY_ENABLED and the query was recognized as such by
     # table_query_engine.try_structured_query(). None/absent for every
-    # ordinary semantic query — no behavior change otherwise.
+    # ordinary semantic query â€” no behavior change otherwise.
     structured_result: Optional[dict] = None
     # Additive: per-stage latency breakdown (routing/vector/keyword/RRF/
-    # rerank/synthesis, whichever ran) populated from app.core.tracing —
+    # rerank/synthesis, whichever ran) populated from app.core.tracing â€”
     # None only for the early conversational short-circuit, where no
     # pipeline stages ran.
     timings: Optional[dict] = None
@@ -267,7 +267,7 @@ def _try_structured_query(req: "QueryRequest") -> Optional[dict]:
 
 def _format_structured_fact(structured: dict) -> str:
     """Render the structured result as an authoritative computed-fact prefix
-    for the synthesis prompt, so Gemma can cite it directly instead of
+    for the synthesis prompt, so Groq can cite it directly instead of
     estimating from retrieved text."""
     op = structured.get("operation")
     column = structured.get("column")
@@ -278,12 +278,12 @@ def _format_structured_fact(structured: dict) -> str:
     if op == "LOOKUP":
         summary = f"{column} = {value} ({filter_desc})"
     elif op in ("LIST", "FILTER", "RANKING"):
-        # value is list[dict] of matched rows — enumerate them ALL explicitly
+        # value is list[dict] of matched rows â€” enumerate them ALL explicitly
         # so synthesis can't silently drop any (unlike relying on whatever
         # chunks a top-k semantic retrieval happened to surface). FILTER/
         # RANKING (tier-1 SQL pushdown) additionally carry shown_row_count/
         # truncated when the match set exceeded TABLE_STRUCTURED_MAX_ROWS_
-        # INJECTED — that gets surfaced as an explicit note rather than
+        # INJECTED â€” that gets surfaced as an explicit note rather than
         # silently dropping the excess.
         rows = value if isinstance(value, list) else []
         matched_count = structured.get("matched_row_count", len(rows))
@@ -296,10 +296,10 @@ def _format_structured_fact(structured: dict) -> str:
         ]
         label = "ranked result" if op == "RANKING" else "row(s) match"
         completeness = (
-            f"This is the COMPLETE and EXACT list — do not omit any entry or add others:"
+            f"This is the COMPLETE and EXACT list â€” do not omit any entry or add others:"
             if not truncated else
             f"Showing the first {shown_count} of {matched_count} total matches (truncated to fit "
-            f"the response budget — tell the user only a subset is shown and they should narrow "
+            f"the response budget â€” tell the user only a subset is shown and they should narrow "
             f"the query, e.g. by document or a tighter filter, to see the rest):"
         )
         summary = (
@@ -310,7 +310,7 @@ def _format_structured_fact(structured: dict) -> str:
         groups = value if isinstance(value, list) else []
         lines = [f"- {g.get('group')}: {g.get('value')}" for g in groups if isinstance(g, dict)]
         summary = (
-            f"{column} ({filter_desc}), {len(groups)} group(s) — exact computed values, "
+            f"{column} ({filter_desc}), {len(groups)} group(s) â€” exact computed values, "
             f"report every group:\n" + "\n".join(lines)
         )
     else:
@@ -326,12 +326,12 @@ def _synthetic_chunks_from_structured(structured: dict) -> list:
     unchanged for the table-query shortcut, instead of writing a parallel
     synthesis path. The actual exact answer content lives in the
     synthesis_query text (via _format_structured_fact), not in these
-    chunks' `text` — these exist purely so `chunks` is non-empty (bypassing
+    chunks' `text` â€” these exist purely so `chunks` is non-empty (bypassing
     synthesize()'s "no relevant documents" empty-chunks branch) and so
     citations point back at the real source table(s).
 
     relevance_score=1.0 / distance=0.0: this is a deterministic, exact
-    computed result, not a similarity estimate — it should read as maximally
+    computed result, not a similarity estimate â€” it should read as maximally
     confident, not hedge like an ANN match would.
     """
     from app.services.retriever_service import RetrievedChunk
@@ -366,13 +366,13 @@ async def _try_table_query_shortcut(req: "QueryRequest") -> Optional[dict]:
     Structured Query Engine (table_query_engine.try_structured_query, tiered
     SQL-pushdown-then-Python-JSONB) and should never depend on ANN top_k
     truncation, nor burn RAVEN/hybrid-loop/SPYDER time on a query shape that
-    engine can't answer exhaustively in the first place — e.g. "list all
+    engine can't answer exhaustively in the first place â€” e.g. "list all
     companies in the Chemicals sector" needs every matching row, not "the
     top_k=3 most semantically similar chunks".
 
     Returns None (falls through to the existing agentic/classic pipeline,
     completely unchanged) when the query isn't table-shaped, or the
-    structured engine found nothing at all — the fallback chain is always
+    structured engine found nothing at all â€” the fallback chain is always
     SQL pushdown -> Python/JSONB scan -> semantic retrieval, never a
     silent empty answer.
 
@@ -431,12 +431,12 @@ def _is_conversational(query: str) -> bool:
 
 @router.post("/query", response_model=QueryResponse)
 async def query_documents(req: QueryRequest):
-    """Async handler — blocking DB/rerank work runs in a thread pool so the
-    event loop stays free to accept new connections from other users. The Gemma
+    """Async handler â€” blocking DB/rerank work runs in a thread pool so the
+    event loop stays free to accept new connections from other users. The Groq
     call uses an AsyncClient + semaphore so concurrent requests queue gracefully
     instead of exhausting threads or flooding the CDAC endpoint.
 
-    When AGENTIC_RAG_ENABLED=True the retrieve→graph_expand→_rank_chunks block
+    When AGENTIC_RAG_ENABLED=True the retrieveâ†’graph_expandâ†’_rank_chunks block
     is replaced by agentic_pipeline.run() which runs RAVEN + bounded hybrid loop
     + SPYDER. The synthesis and response shape are unchanged."""
     start = time.time()
@@ -459,10 +459,10 @@ async def query_documents(req: QueryRequest):
         if invalid:
             raise HTTPException(status_code=400, detail=f"Invalid document_types: {sorted(invalid)}")
 
-    # ── Table query shortcut: filter/aggregation/ranking/lookup/mixed ────────
+    # â”€â”€ Table query shortcut: filter/aggregation/ranking/lookup/mixed â”€â”€â”€â”€â”€â”€â”€â”€
     # Bypasses RAVEN/hybrid-loop/SPYDER (or classic retrieve+rerank) entirely
     # for query shapes the Structured Query Engine already answers exactly
-    # and exhaustively — see _try_table_query_shortcut's docstring.
+    # and exhaustively â€” see _try_table_query_shortcut's docstring.
     shortcut = await _try_table_query_shortcut(req)
     if shortcut is not None:
         with tracing.stage("synthesize"):
@@ -489,7 +489,7 @@ async def query_documents(req: QueryRequest):
     agentic_stats: Optional[dict] = None
 
     if settings.AGENTIC_RAG_ENABLED:
-        # ── Agentic path: RAVEN → hybrid loop → SPYDER ───────────────────────
+        # â”€â”€ Agentic path: RAVEN â†’ hybrid loop â†’ SPYDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         from app.services.agents import agentic_pipeline
         try:
             _t = time.time()
@@ -515,7 +515,7 @@ async def query_documents(req: QueryRequest):
 
         # agentic_pipeline.run() short-circuits to ([], {"graph_mode": "global",
         # "global_answer": {...}}) when route_graphrag picked global community
-        # search — mirror the classic path's early-return here, otherwise this
+        # search â€” mirror the classic path's early-return here, otherwise this
         # falls through to "No relevant documents found" below and the real
         # graph-synthesized answer is silently discarded.
         if agentic_stats.get("graph_mode") == "global":
@@ -560,11 +560,11 @@ async def query_documents(req: QueryRequest):
         total_retrieved = len(final_chunks)
 
     else:
-        # ── Classic path ───────────────────────────────────────────────────────
+        # â”€â”€ Classic path â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         # Retrieval and GraphRAG availability+routing have no data dependency on
-        # each other (the only real dependency — graphrag_local_chunks dedup —
+        # each other (the only real dependency â€” graphrag_local_chunks dedup â€”
         # needs `retrieved` AND `graph_mode`, so it stays sequential below, after
-        # both legs here have completed) — run them concurrently.
+        # both legs here have completed) â€” run them concurrently.
         top_k_per_store, rerank_cap = _resolve_retrieval_params(req.query)
         try:
             async def _retrieve():
@@ -593,7 +593,7 @@ async def query_documents(req: QueryRequest):
                 logger.error("Windows page-file exhaustion during retrieval: %s", e)
                 raise HTTPException(
                     status_code=503,
-                    detail="Server is under memory pressure — please retry in a moment.",
+                    detail="Server is under memory pressure â€” please retry in a moment.",
                 )
             logger.exception("Retrieval failed (OSError)")
             raise HTTPException(status_code=500, detail=f"Retrieval failed: {e}")
@@ -655,7 +655,7 @@ async def query_documents(req: QueryRequest):
                 logger.warning("GraphRAG local_search failed (non-fatal): %s", _gl_exc)
 
         # The legacy multi-PDF graph expansion (graph_expanded_chunks) used to run
-        # here for graph_mode == "none" — i.e. for ordinary, non-entity questions —
+        # here for graph_mode == "none" â€” i.e. for ordinary, non-entity questions â€”
         # mining entities from the retrieved chunk text and pulling in related
         # documents via the graph. That meant "normal" questions still got graph
         # contributions even though route_graphrag() found no entity to justify it.
@@ -679,7 +679,7 @@ async def query_documents(req: QueryRequest):
                 timings=tracing.get_timings(),
             )
 
-        # Balanced per-store pool → cross-encoder rerank (CPU-heavy) — thread pool
+        # Balanced per-store pool â†’ cross-encoder rerank (CPU-heavy) â€” thread pool
         with tracing.stage("rank") as _span:
             final_chunks, pool_size = await asyncio.to_thread(
                 _rank_chunks, req.query, retrieved, req.top_k, req.use_reranker, rerank_cap
@@ -688,20 +688,20 @@ async def query_documents(req: QueryRequest):
 
         stores_searched = list({c.store_type for c in retrieved})
 
-    # ── Structured table query (Phase 2, additive) ───────────────────────────
-    # Runs alongside retrieval/rerank above — never replaces it. When it
+    # â”€â”€ Structured table query (Phase 2, additive) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # Runs alongside retrieval/rerank above â€” never replaces it. When it
     # recognizes an exact aggregate/lookup intent, its computed fact is
-    # prefixed onto the synthesis query so Gemma can cite the exact number
+    # prefixed onto the synthesis query so Groq can cite the exact number
     # instead of estimating from retrieved text. When it returns None
     # (feature disabled or intent not recognized), synthesis_query stays
-    # byte-identical to req.query — no behavior change.
+    # byte-identical to req.query â€” no behavior change.
     with tracing.stage("structured-query"):
         structured_result = await asyncio.to_thread(_try_structured_query, req)
     synthesis_query = req.query
     if structured_result is not None:
         synthesis_query = f"{_format_structured_fact(structured_result)}\n\n{req.query}"
 
-    # ── Synthesis — same for both paths ──────────────────────────────────────
+    # â”€â”€ Synthesis â€” same for both paths â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     try:
         with tracing.stage("synthesize"):
             synthesis = await synthesis_service.synthesize(synthesis_query, final_chunks)
@@ -727,7 +727,7 @@ async def query_documents(req: QueryRequest):
     if settings.AGENTIC_RAG_ENABLED:
         # graph_mode/graph_expanded were computed inside agentic_pipeline.run()
         # (Phase 0 route_graphrag + local-search merge) and returned via
-        # agentic_stats — they never existed as query.py locals on this path,
+        # agentic_stats â€” they never existed as query.py locals on this path,
         # so pull them from there instead of the classic-path variables below.
         retrieval_stats["graph_mode"] = (agentic_stats or {}).get("graph_mode", "none")
         retrieval_stats["graph_expanded"] = (agentic_stats or {}).get("graph_expanded", 0)
@@ -755,7 +755,7 @@ _SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 @router.post("/query/stream")
 async def query_documents_stream(req: QueryRequest):
-    """SSE streaming variant — emits token deltas then a final metadata event.
+    """SSE streaming variant â€” emits token deltas then a final metadata event.
     The frontend uses this for real-time display; /query returns a full JSON object.
 
     IMPORTANT: ALL blocking work (retrieval, graph expansion, reranking) is now
@@ -786,14 +786,14 @@ async def query_documents_stream(req: QueryRequest):
         if invalid:
             raise HTTPException(status_code=400, detail=f"Invalid document_types: {sorted(invalid)}")
 
-    # ── Table query shortcut: filter/aggregation/ranking/lookup/mixed ────────
-    # Same rationale as the non-streaming handler's shortcut — see
+    # â”€â”€ Table query shortcut: filter/aggregation/ranking/lookup/mixed â”€â”€â”€â”€â”€â”€â”€â”€
+    # Same rationale as the non-streaming handler's shortcut â€” see
     # _try_table_query_shortcut's docstring. Run before the agentic/classic
     # branch so these query shapes never depend on ANN top_k truncation or
     # burn RAVEN/hybrid-loop/SPYDER time. Classification is pure regex and
-    # the structured engine has no LLM calls, so — like the conversational
+    # the structured engine has no LLM calls, so â€” like the conversational
     # short-circuit right above, which already awaits an LLM call before any
-    # heartbeat — this is fast enough to run before the stream's heartbeat
+    # heartbeat â€” this is fast enough to run before the stream's heartbeat
     # yield without meaningfully risking the proxy-timeout this endpoint's
     # docstring otherwise warns about for genuinely slow pre-stream work.
     tracing.reset_timings()
@@ -845,7 +845,7 @@ async def query_documents_stream(req: QueryRequest):
                 },
                 "query": req.query,
                 "processing_time_seconds": round(time.time() - start, 2),
-                "notes": None if synthesis_ok else "Synthesis error — citations shown below.",
+                "notes": None if synthesis_ok else "Synthesis error â€” citations shown below.",
                 "structured_result": shortcut["structured_result"],
                 "timings": tracing.get_timings(),
             }
@@ -855,13 +855,13 @@ async def query_documents_stream(req: QueryRequest):
         return StreamingResponse(_stream_shortcut(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
     if settings.AGENTIC_RAG_ENABLED:
-        # ── Agentic path ──────────────────────────────────────────────────────
+        # â”€â”€ Agentic path â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         from app.services.agents import agentic_pipeline
 
         async def _stream_agentic_full():
             # Without this, _current_timings stays at its ContextVar default of
             # None for the whole request, so every tracing.stage() call inside
-            # agentic_pipeline.run() (and below) silently no-ops — see
+            # agentic_pipeline.run() (and below) silently no-ops â€” see
             # tracing.stage()'s "if timings is not None" guard. That's why the
             # agentic streaming path used to report no timings at all while the
             # classic path (which does call this) worked fine.
@@ -967,7 +967,7 @@ async def query_documents_stream(req: QueryRequest):
                 },
                 "query": req.query,
                 "processing_time_seconds": round(time.time() - start, 2),
-                "notes": None if synthesis_ok else "Synthesis error — citations shown below.",
+                "notes": None if synthesis_ok else "Synthesis error â€” citations shown below.",
                 "agentic_stats": agentic_stats,
                 "timings": tracing.get_timings(),
             }
@@ -977,7 +977,7 @@ async def query_documents_stream(req: QueryRequest):
         return StreamingResponse(_stream_agentic_full(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
     else:
-        # ── Classic path ──────────────────────────────────────────────────────
+        # â”€â”€ Classic path â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         # ALL blocking work (retrieve, graph-expand, rerank, structured query)
         # is performed INSIDE the generator, after the initial heartbeat yield.
         # This lets FastAPI flush HTTP 200 + SSE headers to the client immediately,
@@ -986,11 +986,11 @@ async def query_documents_stream(req: QueryRequest):
 
         async def _stream():
             tracing.reset_timings()
-            # ── 1. Heartbeat — establish the SSE connection before any blocking work ──
+            # â”€â”€ 1. Heartbeat â€” establish the SSE connection before any blocking work â”€â”€
             yield f"data: {_json.dumps({'type': 'status', 'stage': 'retrieving', 'message': 'Searching documents...'})}\n\n"
             yield f"data: {_json.dumps({'type': 'status', 'stage': 'graph-routing', 'message': 'Routing the query through GraphRAG...'})}\n\n"
 
-            # ── 2. Retrieval + GraphRAG routing (concurrent — see _resolve_graph_mode) ──
+            # â”€â”€ 2. Retrieval + GraphRAG routing (concurrent â€” see _resolve_graph_mode) â”€â”€
             stream_top_k_per_store, stream_rerank_cap = _resolve_retrieval_params(req.query)
             try:
                 async def _retrieve():
@@ -1058,7 +1058,7 @@ async def query_documents_stream(req: QueryRequest):
                         yield "data: [DONE]\n\n"
                     except Exception as _gse:
                         logger.warning("GraphRAG global stream failed: %s", _gse)
-                        yield f"data: {_json.dumps({'type': 'token', 'text': 'Global graph search failed — please try again.'})}\n\n"
+                        yield f"data: {_json.dumps({'type': 'token', 'text': 'Global graph search failed â€” please try again.'})}\n\n"
                         yield f"data: {_json.dumps({'type': 'done', 'citations': [], 'confidence': 0.0, 'retrieval_stats': {}, 'query': req.query, 'processing_time_seconds': round(time.time() - start, 2), 'timings': tracing.get_timings()})}\n\n"
                         yield "data: [DONE]\n\n"
                     return
@@ -1084,11 +1084,11 @@ async def query_documents_stream(req: QueryRequest):
                     logger.warning("GraphRAG local (stream) failed: %s", _sl_exc)
 
             # Legacy multi-PDF graph expansion for non-entity ("none") questions is
-            # intentionally NOT run here — GraphRAG only participates when the query
+            # intentionally NOT run here â€” GraphRAG only participates when the query
             # names an entity present in the graph (stream_graph_mode == "local",
             # handled above). See the matching note in the non-streaming path.
 
-            # ── 4. Rerank ─────────────────────────────────────────────────────
+            # â”€â”€ 4. Rerank â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             yield f"data: {_json.dumps({'type': 'status', 'stage': 'ranking', 'message': 'Ranking results...'})}\n\n"
             with tracing.stage("rank") as _span:
                 final_chunks, pool_size = await asyncio.to_thread(
@@ -1100,17 +1100,17 @@ async def query_documents_stream(req: QueryRequest):
             citations = [_citation_from_chunk(c, bucket) for c in final_chunks]
             yield f"data: {_json.dumps({'type': 'stage', 'stage': 'selected', 'detail': {'chunks': [_chunk_preview_for_stream(c) for c in final_chunks]}})}\n\n"
 
-            # ── 5. Structured table query (additive) ─────────────────────────
+            # â”€â”€ 5. Structured table query (additive) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             with tracing.stage("structured-query"):
                 structured_result = await asyncio.to_thread(_try_structured_query, req)
             synthesis_query = req.query
             if structured_result is not None:
                 synthesis_query = f"{_format_structured_fact(structured_result)}\n\n{req.query}"
 
-            # ── 6. Announce synthesis start ───────────────────────────────────
-            yield f"data: {_json.dumps({'type': 'synthesis_start', 'model': settings.GEMMA4_MODEL_NAME, 'max_tokens': settings.GEMMA4_MAX_TOKENS, 'chunks_used': len(final_chunks), 'stores_searched': stores_searched, 'graph_mode': stream_graph_mode, 'graph_expanded': stream_graph_expanded})}\n\n"
+            # â”€â”€ 6. Announce synthesis start â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            yield f"data: {_json.dumps({'type': 'synthesis_start', 'model': settings.GROQ_MODEL_NAME, 'max_tokens': settings.GROQ_MAX_TOKENS, 'chunks_used': len(final_chunks), 'stores_searched': stores_searched, 'graph_mode': stream_graph_mode, 'graph_expanded': stream_graph_expanded})}\n\n"
 
-            # ── 7. Stream synthesis tokens ────────────────────────────────────
+            # â”€â”€ 7. Stream synthesis tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             synthesis_ok = True
             answer_parts: list[str] = []
             with tracing.stage("synthesize"):
@@ -1123,7 +1123,7 @@ async def query_documents_stream(req: QueryRequest):
                     synthesis_ok = False
                     yield f"data: {_json.dumps({'type': 'token', 'text': 'Answer synthesis failed. Please review the citations below.'})}\n\n"
 
-            # ── 8. Confidence (post-hoc LLM rating) ──────────────────────────
+            # â”€â”€ 8. Confidence (post-hoc LLM rating) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             if synthesis_ok and answer_parts:
                 conf_result = await _blended_confidence_for_stream(
                     synthesis_query, "".join(answer_parts), final_chunks,
@@ -1141,7 +1141,7 @@ async def query_documents_stream(req: QueryRequest):
                     },
                 }
 
-            # ── 9. Done event ─────────────────────────────────────────────────
+            # â”€â”€ 9. Done event â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             done_payload = {
                 "type": "done",
                 "citations": [c.model_dump() for c in citations],
@@ -1157,7 +1157,7 @@ async def query_documents_stream(req: QueryRequest):
                 },
                 "query": req.query,
                 "processing_time_seconds": round(time.time() - start, 2),
-                "notes": None if synthesis_ok else "Synthesis error — citations shown below.",
+                "notes": None if synthesis_ok else "Synthesis error â€” citations shown below.",
                 "structured_result": structured_result,
                 "timings": tracing.get_timings(),
             }

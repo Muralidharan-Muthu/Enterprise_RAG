@@ -262,7 +262,7 @@ def generate_title(session_id: str):
             return {"title": "New Chat"}
 
         first_message = row[0][:300]
-        title = _call_gemma_for_title(first_message)
+        title = _call_groq_for_title(first_message)
 
         with get_db() as conn:
             with conn.cursor() as cur:
@@ -280,14 +280,14 @@ def generate_title(session_id: str):
         raise
 
 
-def _call_gemma_for_title(first_message: str) -> str:
-    base = settings.GEMMA4_BASE_URL.rstrip("/")
+def _call_groq_for_title(first_message: str) -> str:
+    base = settings.GROQ_BASE_URL.rstrip("/")
     headers = {"Content-Type": "application/json"}
-    if getattr(settings, "GEMMA4_API_KEY", None):
-        headers["Authorization"] = f"Bearer {settings.GEMMA4_API_KEY}"
+    if getattr(settings, "GROQ_API_KEY", None):
+        headers["Authorization"] = f"Bearer {settings.GROQ_API_KEY}"
 
     payload = {
-        "model": settings.GEMMA4_MODEL_NAME,
+        "model": settings.GROQ_MODEL_NAME,
         "messages": [
             {
                 "role": "user",

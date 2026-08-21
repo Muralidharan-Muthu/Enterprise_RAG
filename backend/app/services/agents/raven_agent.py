@@ -15,7 +15,7 @@ Output shape: {
 
 All errors → fail-open: returns the original query with empty sub_queries.
 Feature-flagged: when RAVEN_ENABLED=False the fallback shape is returned
-immediately without calling Gemma.
+immediately without calling Groq.
 """
 import json
 import logging
@@ -23,7 +23,7 @@ import re
 from typing import Optional
 
 from app.config import settings
-from app.services import gemma_client
+from app.services import groq_client
 
 logger = logging.getLogger(__name__)
 
@@ -100,8 +100,8 @@ async def reframe(query: str) -> dict:
     Returns the fallback shape (reframed=query, sub_queries=[], store_hint=None,
     used_fallback=True) when:
     - RAVEN_ENABLED is False
-    - GEMMA4_BASE_URL is not configured
-    - Gemma call fails for any reason
+    - GROQ_BASE_URL is not configured
+    - Groq call fails for any reason
     - LLM output cannot be parsed
     """
     fallback = {**_FALLBACK_SHAPE, "reframed": query}
@@ -110,12 +110,12 @@ async def reframe(query: str) -> dict:
         logger.debug("RAVEN disabled — returning raw query")
         return fallback
 
-    if not settings.GEMMA4_BASE_URL:
-        logger.debug("GEMMA4_BASE_URL not set — RAVEN returning raw query")
+    if not settings.GROQ_BASE_URL:
+        logger.debug("GROQ_BASE_URL not set — RAVEN returning raw query")
         return fallback
 
     try:
-        raw = await gemma_client.chat_async(
+        raw = await groq_client.chat_async(
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": query},

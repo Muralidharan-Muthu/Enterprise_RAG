@@ -60,11 +60,11 @@ def extract_entities(text: str, max_entities: int = DEFAULT_MAX_ENTITIES) -> lis
     if not text or not text.strip():
         return []
 
-    if settings.GEMMA4_BASE_URL:
+    if settings.GROQ_BASE_URL:
         try:
-            parsed = _call_gemma_ner(text, max_entities)
-            # `is not None` (not truthiness) matters here: _parse_gemma_entities
-            # returns [] when Gemma *correctly* found zero entities in the text —
+            parsed = _call_groq_ner(text, max_entities)
+            # `is not None` (not truthiness) matters here: _parse_groq_entities
+            # returns [] when Groq *correctly* found zero entities in the text —
             # that's a valid answer, not a failure, and must not fall through to
             # the regex fallback (which would invent pseudo-entities from any
             # capitalized phrase, e.g. table headers or fiscal periods like
@@ -102,13 +102,13 @@ def _rule_based_entities(text: str, max_entities: int) -> list[dict]:
     return out
 
 
-def _call_gemma_ner(text: str, max_entities: int) -> list[dict] | None:
-    base = settings.GEMMA4_BASE_URL.rstrip("/")
+def _call_groq_ner(text: str, max_entities: int) -> list[dict] | None:
+    base = settings.GROQ_BASE_URL.rstrip("/")
     headers = {"Content-Type": "application/json"}
-    if settings.GEMMA4_API_KEY:
-        headers["Authorization"] = f"Bearer {settings.GEMMA4_API_KEY}"
+    if settings.GROQ_API_KEY:
+        headers["Authorization"] = f"Bearer {settings.GROQ_API_KEY}"
     payload = {
-        "model": settings.GEMMA4_MODEL_NAME,
+        "model": settings.GROQ_EXTRACTION_MODEL or settings.GROQ_MODEL_NAME,
         "messages": [
             {"role": "system", "content": _SYSTEM_PROMPT % max_entities},
             {"role": "user", "content": text[:6000]},
@@ -116,14 +116,18 @@ def _call_gemma_ner(text: str, max_entities: int) -> list[dict] | None:
         "max_tokens": 512,
         "temperature": 0.0,
     }
-    with httpx.Client(timeout=settings.GEMMA4_TIMEOUT_SECONDS) as client:
+    with httpx.Client(timeout=settings.GROQ_TIMEOUT_SECONDS) as client:
         resp = client.post(f"{base}/chat/completions", json=payload, headers=headers)
         resp.raise_for_status()
     content = resp.json()["choices"][0]["message"]["content"]
-    return _parse_gemma_entities(content)
+    return _parse_groq_entities(content)
 
 
-def _parse_gemma_entities(raw: str) -> list[dict] | None:
+# Backward-compat aliases
+_call_gemma_ner = _call_groq_ner
+
+
+def _parse_groq_entities(raw: str) -> list[dict] | None:
     """Parse the NER JSON; dedup by canonical name, skip blanks. None on bad JSON."""
     cleaned = re.sub(r"```(?:json)?", "", raw or "").strip().rstrip("`").strip()
     try:

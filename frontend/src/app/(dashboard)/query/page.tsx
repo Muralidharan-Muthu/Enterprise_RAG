@@ -284,7 +284,7 @@ function confidenceInfo(c: number) {
   return { label: "Low", color: "text-gray-400", bg: "bg-gray-500" };
 }
 
-// Compact "Retrieval XX%×YY%wt + Gemma XX%×YY%wt" line shown inline under the
+// Compact "Retrieval XX%xYY%wt + Groq XX%×YY%wt" line shown inline under the
 // confidence bar so the weighting is always visible in the chat response — no
 // click/hover required. Returns null when there's nothing meaningful to show
 // (e.g. confidence_breakdown missing for an older/restored message that
@@ -294,9 +294,9 @@ function confidenceWeightSummary(breakdown?: ConfidenceBreakdown | null): string
   const pct = (n: number) => Math.round(n * 100);
 
   if (breakdown.method === "blended") {
-    const [retrieval, gemma] = breakdown.components;
-    if (!retrieval || !gemma) return null;
-    return `Retrieval ${pct(retrieval.score)}%×${pct(retrieval.weight)}%wt + Gemma ${pct(gemma.score)}%×${pct(gemma.weight)}%wt`;
+    const [retrieval, groq] = breakdown.components;
+    if (!retrieval || !groq) return null;
+    return `Retrieval ${pct(retrieval.score)}%×${pct(retrieval.weight)}%wt + Groq ${pct(groq.score)}%×${pct(groq.weight)}%wt`;
   }
 
   if (breakdown.method === "retrieval_only") {
@@ -1274,9 +1274,9 @@ function ConfidenceBadge({
 
   const methodNote =
     breakdown?.method === "blended"
-      ? "Weighted blend of reranker relevance and Gemma's self-rated confidence."
+      ? "Weighted blend of reranker relevance and Groq's self-rated confidence."
       : breakdown?.method === "retrieval_only"
-      ? "Based on reranker relevance scores only — no Gemma self-rating was available for this answer."
+      ? "Based on reranker relevance scores only — no Groq self-rating was available for this answer."
       : breakdown?.method === "chunk_average"
       ? "Simple average of the relevance scores across all cited chunks."
       : null;
@@ -1888,7 +1888,7 @@ function DocumentChat({
               updateTrace("structured", "complete");
               updateTrace("synthesize", "running", "Building answer from selected evidence");
               localSynthesisInfo = {
-                model: event.model ?? "Gemma 4",
+                model: event.model ?? "Groq",
                 maxTokens: event.max_tokens ?? 0,
                 chunksUsed: event.chunks_used ?? 0,
                 storesSearched: event.stores_searched ?? [],

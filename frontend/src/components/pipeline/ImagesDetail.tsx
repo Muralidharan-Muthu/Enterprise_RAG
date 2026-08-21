@@ -393,7 +393,7 @@ export function ImagesDetail({ doc }: Props) {
         <p className="text-[11px] text-gray-500 dark:text-gray-400">
           Each figure is cropped and pre-filtered to skip decorative or junk
           images (icons, logos, blanks, duplicates); the rest are OCR&apos;d
-          and/or analyzed by Gemma-4 vision into retrieval-ready structured
+          and/or analyzed by Groq VLM into retrieval-ready structured
           content, embedded (BGE-1024) and saved to image_store — appearing
           here as each one finishes.
         </p>

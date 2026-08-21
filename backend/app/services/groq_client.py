@@ -1,5 +1,5 @@
 """
-Shared Gemma 4 (CDAC OpenAI-compatible) chat client.
+Shared Groq (OpenAI-compatible) chat client.
 
 Provides two entry points:
   chat()        — synchronous, for Celery ingestion workers
@@ -7,8 +7,8 @@ Provides two entry points:
 
 Both use a process-wide pooled client (TLS handshake paid once) and the same
 retry / backoff logic.  The async variant additionally acquires a semaphore slot
-so at most GEMMA4_MAX_CONCURRENT requests run in parallel — excess requests queue
-rather than opening parallel connections that overwhelm the CDAC endpoint.
+so at most GROQ_MAX_CONCURRENT requests run in parallel — excess requests queue
+rather than opening parallel connections that overwhelm the endpoint.
 """
 import asyncio
 import json as _json
@@ -32,31 +32,31 @@ def _backoff(attempt: int) -> float:
 
 
 def _base_url() -> str:
-    return (settings.GROQ_BASE_URL or settings.GEMMA4_BASE_URL or "https://api.groq.com/openai/v1").rstrip("/")
+    return (settings.GROQ_BASE_URL or "https://api.groq.com/openai/v1").rstrip("/")
 
 
 def _api_key() -> str:
-    return settings.GROQ_API_KEY or settings.GEMMA4_API_KEY
+    return settings.GROQ_API_KEY
 
 
 def _model_name() -> str:
-    return settings.GROQ_MODEL_NAME or settings.GEMMA4_MODEL_NAME or "llama-3.3-70b-versatile"
+    return settings.GROQ_MODEL_NAME or "llama-3.3-70b-versatile"
 
 
 def _timeout_seconds() -> int:
-    return settings.GROQ_TIMEOUT_SECONDS or settings.GEMMA4_TIMEOUT_SECONDS or 60
+    return settings.GROQ_TIMEOUT_SECONDS or 60
 
 
 def _connect_timeout() -> int:
-    return settings.GROQ_CONNECT_TIMEOUT_SECONDS or settings.GEMMA4_CONNECT_TIMEOUT_SECONDS or 10
+    return settings.GROQ_CONNECT_TIMEOUT_SECONDS or 10
 
 
 def _max_retries() -> int:
-    return settings.GROQ_MAX_RETRIES if settings.GROQ_MAX_RETRIES is not None else settings.GEMMA4_MAX_RETRIES
+    return settings.GROQ_MAX_RETRIES
 
 
 def _max_concurrent() -> int:
-    return settings.GROQ_MAX_CONCURRENT or settings.GEMMA4_MAX_CONCURRENT or 5
+    return settings.GROQ_MAX_CONCURRENT or 5
 
 
 def _build_headers() -> dict:
@@ -118,7 +118,7 @@ def _get_sync_semaphore() -> threading.Semaphore:
     if _sync_semaphore is None:
         with _sync_semaphore_lock:
             if _sync_semaphore is None:
-                limit = settings.GROQ_MAX_CONCURRENT or settings.GEMMA4_MAX_CONCURRENT or 5
+                limit = settings.GROQ_MAX_CONCURRENT or 5
                 if limit <= 0:
                     limit = 1
                 _sync_semaphore = threading.Semaphore(limit)

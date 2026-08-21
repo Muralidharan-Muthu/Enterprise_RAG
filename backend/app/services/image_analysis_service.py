@@ -1,6 +1,6 @@
 """
 Per-image vision analysis: extract structured knowledge from a cropped document image
-via the Gemma 4 multimodal API (OpenAI-compatible /chat/completions). Used by the
+via the Groq / multimodal VLM API (OpenAI-compatible /chat/completions). Used by the
 ingestion images stage. Combines the raw image with raw OCR text to produce a
 retrieval-ready structured extraction and a routing decision (detected_store).
 
@@ -55,7 +55,7 @@ def _extract_first_json_object(text: str) -> dict:
     """Parse the first JSON object out of an LLM reply, tolerating:
     - markdown fences (```json … ```)
     - trailing prose after the closing brace
-    - literal newlines inside string values (common Gemma habit)
+    - literal newlines inside string values (common LLM habit)
     """
     # Strip ALL variants of code fences (```json, ```, ~~~) then stray backticks
     cleaned = re.sub(r"```(?:json|JSON)?|~~~", "", text or "")
@@ -148,7 +148,7 @@ def _build_prompt() -> str:
     Returns
     -------
     str
-        The complete prompt string sent to the Gemma 4 multimodal API.
+        The complete prompt string sent to the multimodal VLM API.
     """
     base = (
         "You are an expert multimodal document understanding model responsible for extracting "
@@ -249,7 +249,7 @@ def _bound_ocr_text(raw_ocr_text: str, max_chars: int) -> str:
 def analyze_image(png_bytes: bytes, raw_ocr_text: str) -> dict:
     """Extract structured knowledge from a cropped document image for RAG ingestion.
 
-    Sends both the image and the raw OCR text to the Gemma 4 multimodal VLM. The VLM
+    Sends both the image and the raw OCR text to the multimodal VLM. The VLM
     performs a rich, retrieval-ready extraction and determines the appropriate destination
     store. The raw OCR is included as supporting evidence so the model can reconcile OCR
     errors against what it sees in the image.
@@ -290,15 +290,15 @@ def analyze_image(png_bytes: bytes, raw_ocr_text: str) -> dict:
         "extraction_quality": _fb_route.extraction_quality,
     }
 
-    if not settings.GEMMA4_BASE_URL:
-        logger.warning("GEMMA4_BASE_URL not set — skipping image analysis")
+    if not settings.GROQ_BASE_URL:
+        logger.warning("GROQ_BASE_URL not set — skipping image analysis")
         return _fallback
 
     try:
         b64 = base64.b64encode(png_bytes).decode()
         headers = {"Content-Type": "application/json"}
-        if settings.GEMMA4_API_KEY:
-            headers["Authorization"] = f"Bearer {settings.GEMMA4_API_KEY}"
+        if settings.GROQ_API_KEY:
+            headers["Authorization"] = f"Bearer {settings.GROQ_API_KEY}"
 
         bounded_ocr_text = _bound_ocr_text(raw_ocr_text or "", settings.VLM_OCR_MAX_CHARS)
 
@@ -309,7 +309,7 @@ def analyze_image(png_bytes: bytes, raw_ocr_text: str) -> dict:
         full_prompt = _VLM_PROMPT + ocr_section
 
         payload = {
-            "model": settings.GEMMA4_MODEL_NAME,
+            "model": settings.GROQ_MODEL_NAME,
             "messages": [{
                 "role": "user",
                 "content": [
@@ -321,8 +321,8 @@ def analyze_image(png_bytes: bytes, raw_ocr_text: str) -> dict:
             "temperature": 0.0,
         }
 
-        base = settings.GEMMA4_BASE_URL.rstrip("/")
-        with httpx.Client(timeout=settings.GEMMA4_TIMEOUT_SECONDS) as client:
+        base = settings.GROQ_BASE_URL.rstrip("/")
+        with httpx.Client(timeout=settings.GROQ_TIMEOUT_SECONDS) as client:
             resp = client.post(f"{base}/chat/completions", json=payload, headers=headers)
             resp.raise_for_status()
 

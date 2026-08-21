@@ -51,9 +51,9 @@ def extract_graph_elements(
     if not text or not text.strip():
         return {"entities": [], "relationships": []}
 
-    if settings.GEMMA4_BASE_URL:
+    if settings.GROQ_BASE_URL:
         try:
-            result = _call_gemma_graph(text, max_entities, max_relationships)
+            result = _call_groq_graph(text, max_entities, max_relationships)
             if result is not None:
                 return result
             logger.warning("Graph element extraction parse failed — using fallback")
@@ -74,9 +74,9 @@ def extract_graph_elements(
         return {"entities": [], "relationships": []}
 
 
-def _call_gemma_graph(text: str, max_entities: int, max_relationships: int) -> dict | None:
+def _call_groq_graph(text: str, max_entities: int, max_relationships: int) -> dict | None:
     """Call Groq LLM for graph extraction. Returns parsed dict or None on parse failure."""
-    from app.services.gemma_client import chat
+    from app.services.groq_client import chat
 
     system_prompt = _GRAPH_SYSTEM_PROMPT % (max_entities, max_relationships)
     messages = [
@@ -90,6 +90,10 @@ def _call_gemma_graph(text: str, max_entities: int, max_relationships: int) -> d
         model=settings.GROQ_EXTRACTION_MODEL,
     )
     return _parse_graph_response(raw)
+
+
+# Backward-compat alias
+_call_gemma_graph = _call_groq_graph
 
 
 def _parse_graph_response(raw: str) -> dict | None:

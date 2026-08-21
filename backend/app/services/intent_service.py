@@ -13,7 +13,7 @@ expensive, and stops at the first one that produces a confident answer:
      already computed. No extra model call or network round-trip; catches
      paraphrases the keyword list misses. Gated by INTENT_USE_SEMANTIC_ROUTER
      (default True) and only usable when the caller passes query_embedding.
-  3. Gemma-4 (gemma_client) — a full LLM round-trip. Gated by INTENT_USE_LLM
+  3. Groq (groq_client) — a full LLM round-trip. Gated by INTENT_USE_LLM
      (default False) since it adds real latency to the query's critical path;
      reserved for cases the first two tiers couldn't resolve confidently.
 
@@ -26,7 +26,7 @@ import logging
 import re
 
 from app.config import settings
-from app.services import gemma_client
+from app.services import groq_client
 
 logger = logging.getLogger(__name__)
 
@@ -167,11 +167,11 @@ def classify_intent(query: str, query_embedding=None) -> dict:
         except Exception as exc:
             logger.warning("Semantic router failed (%s) — continuing to next tier", exc)
 
-    if not settings.INTENT_USE_LLM or not (settings.GROQ_BASE_URL or settings.GEMMA4_BASE_URL):
+    if not settings.INTENT_USE_LLM or not (settings.GROQ_BASE_URL or settings.GROQ_BASE_URL):
         return rule_intent
 
     try:
-        content = gemma_client.chat(
+        content = groq_client.chat(
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": query},

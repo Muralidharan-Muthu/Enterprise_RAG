@@ -3,7 +3,7 @@ Celery ingestion pipeline task.
 
 Stages (in order):
   1. parsing   — Docling PDF → ParsedDocument
-  2. routing   — Gemma 4 / rule-based → document_type
+  2. routing   — Groq / rule-based → document_type
   3. chunking  — type-aware chunker → Chunk list
   4. embedding — BGE bge-large-en-v1.5 → numpy vectors
   5. storing   — bulk insert into correct Supabase store
@@ -269,13 +269,13 @@ def ingest_document(self, document_id: str, storage_path: str, job_id: str) -> d
         chunks = chunk_document(parsed_doc, router_result.document_type)
         legal_clauses = None
         if router_result.document_type == "legal":
-            # Gemma-first: extracts clause boundaries AND all metadata in one pass.
-            # Falls back to regex internally when Gemma is unavailable or too many
+            # Groq-first: extracts clause boundaries AND all metadata in one pass.
+            # Falls back to regex internally when Groq is unavailable or too many
             # segments fail. Regex fallback produces structural-only clauses →
             # we run enrich_clauses_batch() after to fill the metadata columns.
-            from app.services.gemma_clause_extractor import extract_clauses_gemma
+            from app.services.groq_clause_extractor import extract_clauses_groq
             job_repo.update_job(job_id, "chunking", progress=30)
-            legal_clauses, _extraction_meta = extract_clauses_gemma(parsed_doc)
+            legal_clauses, _extraction_meta = extract_clauses_groq(parsed_doc)
             logger.info(
                 "[%s] Clause extraction: %d clauses, source=%s%s",
                 document_id, len(legal_clauses), _extraction_meta.source,

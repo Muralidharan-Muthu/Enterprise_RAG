@@ -30,7 +30,7 @@ def _get_client() -> httpx.Client:
     if _client is None or _client.is_closed:
         with _client_lock:
             if _client is None or _client.is_closed:
-                _client = httpx.Client(timeout=settings.GEMMA4_TIMEOUT_SECONDS)
+                _client = httpx.Client(timeout=settings.GROQ_TIMEOUT_SECONDS)
     return _client
 
 DOCUMENT_TYPES = ("policy", "financial", "legal", "entity", "research")
@@ -85,10 +85,17 @@ class RouterResult:
     used_fallback: bool = False
 
 
+"""
+Groq document router — classifies a parsed document into one of 5 types
+using Groq LLM with a fast rule-based fallback.
+"""
+
+# ... [imports remain above]
+
 def classify_document(parsed_doc: ParsedDocument) -> RouterResult:
     """
-    Classify the document type using Gemma 4 on CDAC.
-    Falls back to rule-based classification if Gemma is unavailable.
+    Classify the document type using Groq LLM.
+    Falls back to rule-based classification if Groq is unavailable.
     """
     content_excerpt = parsed_doc.raw_text[:2000]
     prompt = USER_PROMPT_TEMPLATE.format(
@@ -98,42 +105,42 @@ def classify_document(parsed_doc: ParsedDocument) -> RouterResult:
         page_count=parsed_doc.page_count,
     )
 
-    if settings.GEMMA4_BASE_URL:
+    if settings.GROQ_BASE_URL:
         try:
-            raw_json = _call_gemma(prompt)
-            result = _parse_gemma_response(raw_json)
+            raw_json = _call_groq(prompt)
+            result = _parse_groq_response(raw_json)
             if result and result.confidence >= 0.5:
                 logger.info(
-                    "Gemma classified '%s' as '%s' (confidence=%.2f)",
+                    "Groq classified '%s' as '%s' (confidence=%.2f)",
                     parsed_doc.filename,
                     result.document_type,
                     result.confidence,
                 )
                 return result
-            logger.warning("Gemma returned low confidence (%.2f), using fallback", result.confidence if result else 0)
+            logger.warning("Groq returned low confidence (%.2f), using fallback", result.confidence if result else 0)
         except Exception as exc:
-            logger.warning("Gemma4 call failed: %s — using rule-based fallback", exc)
+            logger.warning("Groq call failed: %s — using rule-based fallback", exc)
     else:
-        logger.info("GEMMA4_BASE_URL not configured — using rule-based fallback")
+        logger.info("GROQ_BASE_URL not configured — using rule-based fallback")
 
     return _rule_based_classify(parsed_doc)
 
 
 @retry(stop=stop_after_attempt(2), wait=wait_fixed(2))
-def _call_gemma(user_prompt: str) -> str:
-    """HTTP call to CDAC Gemma 4 endpoint. Tries OpenAI-compatible format first."""
-    base_url = settings.GEMMA4_BASE_URL.rstrip("/")
+def _call_groq(user_prompt: str) -> str:
+    """HTTP call to Groq endpoint. Tries OpenAI-compatible format first."""
+    base_url = settings.GROQ_BASE_URL.rstrip("/")
     headers = {"Content-Type": "application/json"}
-    if settings.GEMMA4_API_KEY:
-        headers["Authorization"] = f"Bearer {settings.GEMMA4_API_KEY}"
+    if settings.GROQ_API_KEY:
+        headers["Authorization"] = f"Bearer {settings.GROQ_API_KEY}"
 
     payload = {
-        "model": settings.GEMMA4_MODEL_NAME,
+        "model": settings.GROQ_ROUTING_MODEL or settings.GROQ_MODEL_NAME,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        "max_tokens": settings.GEMMA4_MAX_TOKENS,
+        "max_tokens": settings.GROQ_MAX_TOKENS,
         "temperature": 0.1,
     }
 
@@ -146,7 +153,11 @@ def _call_gemma(user_prompt: str) -> str:
     return data["choices"][0]["message"]["content"]
 
 
-def _parse_gemma_response(raw: str) -> Optional[RouterResult]:
+# Backward-compat alias
+_call_gemma = _call_groq
+
+
+def _parse_groq_response(raw: str) -> Optional[RouterResult]:
     # Strip markdown code fences if LLM wrapped the JSON
     cleaned = re.sub(r"```(?:json)?", "", raw).strip().rstrip("```").strip()
     try:
@@ -200,13 +211,6 @@ def _rule_based_classify(parsed_doc: ParsedDocument) -> RouterResult:
                "confidential", "breach", "obligation", "arbitration"]:
         if kw in text:
             scores["legal"] += 1
-
-    # Research signals
-    for kw in ["abstract", "methodology", "hypothesis", "conclusion", "doi",
-               "journal", "citation", "bibliography", "experiment", "research",
-               "study", "findings", "paper"]:
-        if kw in text:
-            scores["research"] += 1
 
     # Entity signals
     for kw in ["organization chart", "org chart", "subsidiary", "hierarchy",

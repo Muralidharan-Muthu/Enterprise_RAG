@@ -4,7 +4,7 @@ import logging
 import re
 
 from app.config import settings
-from app.services import gemma_client
+from app.services import groq_client
 
 logger = logging.getLogger(__name__)
 
@@ -86,17 +86,17 @@ Return ONLY a JSON object (no markdown fences, no text before or after it):
 async def synthesize_conversational(query: str) -> str:
     """Public entry-point for conversational queries (no document context).
     Returns a plain answer string — callers build their own response envelope."""
-    if settings.GEMMA4_BASE_URL:
+    if settings.GROQ_BASE_URL:
         try:
-            result = await _call_gemma_conversational(query)
+            result = await _call_groq_conversational(query)
             return result["answer"]
         except Exception as e:
-            logger.warning("Gemma conversational call failed (%s)", e)
+            logger.warning("Groq conversational call failed (%s)", e)
     return "Hello! How can I help you with your documents?"
 
 
 async def synthesize(query: str, chunks: list) -> dict:
-    """Generate synthesized answer with citations. Falls back if Gemma unavailable."""
+    """Generate synthesized answer with citations. Falls back if Groq unavailable."""
     if not chunks:
         return {
             "answer": (
@@ -113,9 +113,9 @@ async def synthesize(query: str, chunks: list) -> dict:
     # conversational or off-topic — answer without injecting document context.
     top_score = max((getattr(c, "relevance_score", 0.0) for c in chunks), default=0.0)
     if top_score < _MIN_RELEVANCE_THRESHOLD:
-        if settings.GROQ_BASE_URL or settings.GEMMA4_BASE_URL:
+        if settings.GROQ_BASE_URL:
             try:
-                return await _call_gemma_conversational(query)
+                return await _call_groq_conversational(query)
             except Exception as e:
                 logger.warning("Groq conversational call failed (%s)", e)
         return {
@@ -130,12 +130,12 @@ async def synthesize(query: str, chunks: list) -> dict:
     context_blocks = _build_context(chunks)
     ret_breakdown = retrieval_confidence_breakdown(chunks)
 
-    if not (settings.GROQ_BASE_URL or settings.GEMMA4_BASE_URL):
+    if not settings.GROQ_BASE_URL:
         logger.info("GROQ_BASE_URL not set — using fallback synthesis")
         return _fallback(chunks, ret_breakdown)
 
     try:
-        return await _call_gemma(query, context_blocks, retrieval_breakdown=ret_breakdown)
+        return await _call_groq(query, context_blocks, retrieval_breakdown=ret_breakdown)
     except Exception as e:
         logger.warning("Groq synthesis failed (%s), using fallback", e)
         return _fallback(chunks, ret_breakdown)
@@ -248,9 +248,9 @@ def _content_for_chunk(chunk) -> str:
     return content[:600]
 
 
-async def _call_gemma_conversational(query: str) -> dict:
+async def _call_groq_conversational(query: str) -> dict:
     """Call Groq LLM for greetings / off-topic queries without any document context."""
-    raw = await gemma_client.chat_async(
+    raw = await groq_client.chat_async(
         messages=[
             {"role": "system", "content": _CONVERSATIONAL_SYSTEM_PROMPT},
             {"role": "user", "content": query},
@@ -273,14 +273,14 @@ async def _call_gemma_conversational(query: str) -> dict:
     }
 
 
-async def _call_gemma(query: str, context_blocks: str, retrieval_breakdown: dict) -> dict:
+async def _call_groq(query: str, context_blocks: str, retrieval_breakdown: dict) -> dict:
     user_prompt = _USER_TEMPLATE.format(query=query, context_blocks=context_blocks)
-    raw = await gemma_client.chat_async(
+    raw = await groq_client.chat_async(
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        max_tokens=settings.GROQ_MAX_TOKENS or settings.GEMMA4_MAX_TOKENS or 800,
+        max_tokens=settings.GROQ_MAX_TOKENS or 800,
         temperature=0.1,
         model=settings.GROQ_SYNTHESIS_MODEL,
     )
@@ -288,9 +288,9 @@ async def _call_gemma(query: str, context_blocks: str, retrieval_breakdown: dict
 
 
 def _parse_answer(raw: str, retrieval_breakdown: dict) -> dict:
-    """Turn Gemma's reply into the answer dict, tolerating the model's habits.
+    """Turn Groq's reply into the answer dict, tolerating the model's habits.
 
-    The CDAC Gemma endpoint frequently wraps JSON in markdown fences, appends a
+    The Groq endpoint frequently wraps JSON in markdown fences, appends a
     line of commentary after the closing brace (json.loads → 'Extra data'), or
     just answers in plain prose. We try hard to recover a structured answer, and
     when there's no parseable JSON we keep the prose itself as the answer instead
@@ -312,7 +312,7 @@ def _parse_answer(raw: str, retrieval_breakdown: dict) -> dict:
             "notes": obj.get("notes"),
         }
 
-    # No usable JSON answer — salvage the prose Gemma actually produced.
+    # No usable JSON answer — salvage the prose Groq actually produced.
     prose = _strip_fences(raw).strip()
     if prose:
         # Pull any [n] citation numbers the model included inline.
@@ -328,14 +328,14 @@ def _parse_answer(raw: str, retrieval_breakdown: dict) -> dict:
         }
 
     # Truly empty response — let the caller fall back to raw chunks.
-    raise ValueError("Gemma returned an empty response")
+    raise ValueError("Groq returned an empty response")
 
 
 def _strip_fences(text: str) -> str:
     return re.sub(r"```(?:json)?", "", text or "").strip().strip("`").strip()
 
 
-# HTML tags Gemma sometimes generates despite markdown-only instructions.
+# HTML tags Groq sometimes generates despite markdown-only instructions.
 # Conversion order matters: convert paired tags first, then strip stragglers.
 _HTML_PAIRS = [
     (re.compile(r"<u\s*>(.*?)</u\s*>",           re.IGNORECASE | re.DOTALL), r"**\1**"),
@@ -427,9 +427,9 @@ def _blend_confidence(llm_conf: float, retrieval_conf: float) -> float:
 
 
 def _blended_breakdown(llm_conf: float, retrieval_breakdown: dict) -> dict:
-    """Full confidence_breakdown dict for paths where a real Gemma self-rating
+    """Full confidence_breakdown dict for paths where a real Groq self-rating
     exists alongside the retrieval signal (JSON synthesis, or the streaming
-    path's post-hoc rating call — see rate_gemma_confidence)."""
+    path's post-hoc rating call — see rate_groq_confidence)."""
     llm = round(min(max(llm_conf, 0.0), 1.0), 4)
     blended = _blend_confidence(llm_conf, retrieval_breakdown["score"])
     return {
@@ -443,7 +443,7 @@ def _blended_breakdown(llm_conf: float, retrieval_breakdown: dict) -> dict:
                 "detail": retrieval_breakdown,
             },
             {
-                "label": "Gemma confidence",
+                "label": "Groq confidence",
                 "score": llm,
                 "weight": _BLEND_LLM_WEIGHT,
                 "detail": None,
@@ -453,8 +453,8 @@ def _blended_breakdown(llm_conf: float, retrieval_breakdown: dict) -> dict:
 
 
 def _retrieval_only_breakdown(retrieval_breakdown: dict, final: float | None = None) -> dict:
-    """confidence_breakdown dict for paths with no Gemma self-rating available
-    at all (e.g. GEMMA4_BASE_URL unset — see _fallback).
+    """confidence_breakdown dict for paths with no Groq self-rating available
+    at all (e.g. GROQ_BASE_URL unset — see _fallback).
 
     ``final`` overrides the reported top-level score when the caller applies
     extra adjustment on top of the raw retrieval score (e.g. _fallback's 0.5
@@ -495,18 +495,18 @@ async def synthesize_stream(query: str, chunks: list):
     await _maybe_compress(query, chunks)
     context_blocks = _build_context(chunks)
 
-    if not (settings.GROQ_BASE_URL or settings.GEMMA4_BASE_URL):
+    if not settings.GROQ_BASE_URL:
         yield _fallback(chunks, None)["answer"]
         return
 
     user_prompt = _STREAM_USER_TEMPLATE.format(query=query, context_blocks=context_blocks)
     try:
-        async for token in gemma_client.chat_async_stream(
+        async for token in groq_client.chat_async_stream(
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
-            max_tokens=settings.GROQ_MAX_TOKENS or settings.GEMMA4_MAX_TOKENS or 800,
+            max_tokens=settings.GROQ_MAX_TOKENS or 800,
             temperature=0.1,
         ):
             yield token
@@ -515,7 +515,7 @@ async def synthesize_stream(query: str, chunks: list):
         yield _fallback(chunks, None)["answer"]
 
 
-async def rate_gemma_confidence(query: str, answer: str, chunks: list) -> float | None:
+async def rate_groq_confidence(query: str, answer: str, chunks: list) -> float | None:
     """Post-hoc self-rating call for the streaming path.
 
     synthesize_stream() yields raw token deltas with no JSON envelope, so
@@ -525,11 +525,11 @@ async def rate_gemma_confidence(query: str, answer: str, chunks: list) -> float 
     it's a nice-to-have, not worth retry latency) asking the LLM to grade the
     already-generated answer against the context. Returns None on any
     failure so the caller falls back to a retrieval-only confidence."""
-    if not (settings.GROQ_BASE_URL or settings.GEMMA4_BASE_URL) or not chunks:
+    if not settings.GROQ_BASE_URL or not chunks:
         return None
     try:
         context_blocks = _build_context(chunks)
-        raw = await gemma_client.chat_async(
+        raw = await groq_client.chat_async(
             messages=[
                 {"role": "system", "content": _RATING_SYSTEM_PROMPT},
                 {"role": "user", "content": _RATING_USER_TEMPLATE.format(
@@ -553,15 +553,19 @@ async def rate_gemma_confidence(query: str, answer: str, chunks: list) -> float 
         return None
 
 
+# Backward-compat alias
+rate_gemma_confidence = rate_groq_confidence
+
+
 async def blended_confidence_for_stream(query: str, answer: str, chunks: list) -> dict:
     """confidence + confidence_breakdown for the streaming path.
 
-    Makes the rate_gemma_confidence() follow-up call and blends it with the
+    Makes the rate_groq_confidence() follow-up call and blends it with the
     retrieval signal exactly like the non-streaming path (_blend_confidence /
     _blended_breakdown) when it succeeds; falls back to a retrieval-only
     breakdown when the LLM is unreachable or the rating call fails/times out."""
     ret_breakdown = retrieval_confidence_breakdown(chunks)
-    llm_conf = await rate_gemma_confidence(query, answer, chunks)
+    llm_conf = await rate_groq_confidence(query, answer, chunks)
     if llm_conf is None:
         return {
             "confidence": ret_breakdown["score"],

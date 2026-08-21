@@ -4,7 +4,7 @@ Graph build service — Feature 1.3 GraphRAG.
 build_document_graph():
     Per-chunk entity + relationship extraction → Neo4j upsert.
     Bounded by GRAPHRAG_MAX_CHUNKS_PER_DOC; beyond cap falls back to doc-level extraction.
-    Uses a worker-side ThreadPoolExecutor for concurrent Gemma calls.
+    Uses a worker-side ThreadPoolExecutor for concurrent Groq calls.
 
 assemble_chunk_records():
     Bridges Postgres stored_ids (UUIDs per store, insertion-ordered) to chunk

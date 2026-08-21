@@ -222,11 +222,11 @@ export interface HealthResponse {
   database: string;
   redis: string;
   groq_endpoint?: string;
-  gemma_endpoint: string;
+  groq_endpoint: string;
   neo4j: string;
   timestamp: string;
   groq_model?: string;
-  gemma_model?: string;
+  groq_model?: string;
 }
 
 export interface UploadItem {

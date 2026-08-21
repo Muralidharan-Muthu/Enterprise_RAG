@@ -54,8 +54,8 @@ def test_analyze_image_sends_bounded_ocr_to_model(monkeypatch):
     capped at the configured limit."""
     from app.config import settings
 
-    monkeypatch.setattr(settings, "GEMMA4_BASE_URL", "http://fake-gemma4")
-    monkeypatch.setattr(settings, "GEMMA4_API_KEY", "")
+    monkeypatch.setattr(settings, "GROQ_BASE_URL", "http://fake-Groq4")
+    monkeypatch.setattr(settings, "GROQ_API_KEY", "")
     monkeypatch.setattr(settings, "VLM_OCR_MAX_CHARS", 100)
 
     long_ocr = "A" * 5000

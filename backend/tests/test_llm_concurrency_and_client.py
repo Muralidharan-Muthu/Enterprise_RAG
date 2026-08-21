@@ -1,7 +1,7 @@
 """Tests for package B: LLM client hygiene / concurrency safety.
 
-1. gemma_client.chat() (sync path) must be gated by a shared threading.Semaphore
-   sized to settings.GEMMA4_MAX_CONCURRENT, so concurrent callers (e.g. clause
+1. groq_client.chat() (sync path) must be gated by a shared threading.Semaphore
+   sized to settings.GROQ_MAX_CONCURRENT, so concurrent callers (e.g. clause
    enrichment's ThreadPoolExecutor) never exceed the cap.
 2. router_service must reuse a single module-level httpx.Client instead of
    constructing a new one per call.
@@ -16,7 +16,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-import app.services.gemma_client as gemma_client
+import app.services.groq_client as groq_client
 import app.services.router_service as router_service
 
 
@@ -41,22 +41,22 @@ class _ConcurrencyTracker:
 
 
 @pytest.fixture(autouse=True)
-def _reset_gemma_client_state(monkeypatch):
+def _reset_groq_client_state(monkeypatch):
     """Ensure each test starts with fresh module-level singletons so settings
     monkeypatches actually take effect (they're read lazily on first use)."""
-    monkeypatch.setattr(gemma_client, "_sync_semaphore", None)
-    monkeypatch.setattr(gemma_client, "_client", None)
+    monkeypatch.setattr(groq_client, "_sync_semaphore", None)
+    monkeypatch.setattr(groq_client, "_client", None)
     yield
-    monkeypatch.setattr(gemma_client, "_sync_semaphore", None)
-    monkeypatch.setattr(gemma_client, "_client", None)
+    monkeypatch.setattr(groq_client, "_sync_semaphore", None)
+    monkeypatch.setattr(groq_client, "_client", None)
 
 
 def test_sync_semaphore_caps_concurrency(monkeypatch):
-    """Fire many concurrent gemma_client.chat() calls with GEMMA4_MAX_CONCURRENT
+    """Fire many concurrent groq_client.chat() calls with GROQ_MAX_CONCURRENT
     forced low; observed max concurrency must not exceed that cap."""
-    monkeypatch.setattr(gemma_client.settings, "GEMMA4_MAX_CONCURRENT", 2)
-    monkeypatch.setattr(gemma_client.settings, "GEMMA4_BASE_URL", "http://mock-gemma")
-    monkeypatch.setattr(gemma_client.settings, "GEMMA4_MAX_RETRIES", 0)
+    monkeypatch.setattr(groq_client.settings, "GROQ_MAX_CONCURRENT", 2)
+    monkeypatch.setattr(groq_client.settings, "GROQ_BASE_URL", "http://mock-Groq")
+    monkeypatch.setattr(groq_client.settings, "GROQ_MAX_RETRIES", 0)
 
     tracker = _ConcurrencyTracker()
 
@@ -75,12 +75,12 @@ def test_sync_semaphore_caps_concurrency(monkeypatch):
     mock_client = MagicMock()
     mock_client.is_closed = False
     mock_client.post.side_effect = fake_post
-    monkeypatch.setattr(gemma_client, "_client", mock_client)
+    monkeypatch.setattr(groq_client, "_client", mock_client)
 
     n_calls = 10
     with ThreadPoolExecutor(max_workers=n_calls) as pool:
         futures = [
-            pool.submit(gemma_client.chat, [{"role": "user", "content": "hi"}], 50)
+            pool.submit(groq_client.chat, [{"role": "user", "content": "hi"}], 50)
             for _ in range(n_calls)
         ]
         results = [f.result() for f in futures]
@@ -91,10 +91,10 @@ def test_sync_semaphore_caps_concurrency(monkeypatch):
 
 
 def test_sync_semaphore_default_respects_settings(monkeypatch):
-    """With GEMMA4_MAX_CONCURRENT=1, calls must run strictly serially."""
-    monkeypatch.setattr(gemma_client.settings, "GEMMA4_MAX_CONCURRENT", 1)
-    monkeypatch.setattr(gemma_client.settings, "GEMMA4_BASE_URL", "http://mock-gemma")
-    monkeypatch.setattr(gemma_client.settings, "GEMMA4_MAX_RETRIES", 0)
+    """With GROQ_MAX_CONCURRENT=1, calls must run strictly serially."""
+    monkeypatch.setattr(groq_client.settings, "GROQ_MAX_CONCURRENT", 1)
+    monkeypatch.setattr(groq_client.settings, "GROQ_BASE_URL", "http://mock-Groq")
+    monkeypatch.setattr(groq_client.settings, "GROQ_MAX_RETRIES", 0)
 
     tracker = _ConcurrencyTracker()
 
@@ -113,11 +113,11 @@ def test_sync_semaphore_default_respects_settings(monkeypatch):
     mock_client = MagicMock()
     mock_client.is_closed = False
     mock_client.post.side_effect = fake_post
-    monkeypatch.setattr(gemma_client, "_client", mock_client)
+    monkeypatch.setattr(groq_client, "_client", mock_client)
 
     with ThreadPoolExecutor(max_workers=5) as pool:
         futures = [
-            pool.submit(gemma_client.chat, [{"role": "user", "content": "hi"}], 50)
+            pool.submit(groq_client.chat, [{"role": "user", "content": "hi"}], 50)
             for _ in range(5)
         ]
         [f.result() for f in futures]
@@ -126,9 +126,9 @@ def test_sync_semaphore_default_respects_settings(monkeypatch):
 
 
 def test_semaphore_guards_against_non_positive_setting(monkeypatch):
-    """GEMMA4_MAX_CONCURRENT <= 0 must be treated as 1, not break/deadlock."""
-    monkeypatch.setattr(gemma_client.settings, "GEMMA4_MAX_CONCURRENT", 0)
-    sem = gemma_client._get_sync_semaphore()
+    """GROQ_MAX_CONCURRENT <= 0 must be treated as 1, not break/deadlock."""
+    monkeypatch.setattr(groq_client.settings, "GROQ_MAX_CONCURRENT", 0)
+    sem = groq_client._get_sync_semaphore()
     # A semaphore initialized with 1 permit acquires once then blocks;
     # verify it was NOT constructed with 0 (which would deadlock immediately).
     acquired = sem.acquire(timeout=1)
@@ -139,30 +139,30 @@ def test_semaphore_guards_against_non_positive_setting(monkeypatch):
 def test_semaphore_is_shared_singleton(monkeypatch):
     """Repeated calls to _get_sync_semaphore() must return the same instance,
     proving the gate is process-wide, not per-call."""
-    monkeypatch.setattr(gemma_client.settings, "GEMMA4_MAX_CONCURRENT", 3)
-    sem1 = gemma_client._get_sync_semaphore()
-    sem2 = gemma_client._get_sync_semaphore()
+    monkeypatch.setattr(groq_client.settings, "GROQ_MAX_CONCURRENT", 3)
+    sem1 = groq_client._get_sync_semaphore()
+    sem2 = groq_client._get_sync_semaphore()
     assert sem1 is sem2
 
 
 def test_chat_releases_semaphore_on_read_timeout(monkeypatch):
     """Even when chat() raises (ReadTimeout not retried), the semaphore slot
     must be released — otherwise the cap permanently shrinks."""
-    monkeypatch.setattr(gemma_client.settings, "GEMMA4_MAX_CONCURRENT", 1)
-    monkeypatch.setattr(gemma_client.settings, "GEMMA4_BASE_URL", "http://mock-gemma")
-    monkeypatch.setattr(gemma_client.settings, "GEMMA4_MAX_RETRIES", 0)
-    monkeypatch.setattr(gemma_client.settings, "GEMMA4_TIMEOUT_SECONDS", 30)
+    monkeypatch.setattr(groq_client.settings, "GROQ_MAX_CONCURRENT", 1)
+    monkeypatch.setattr(groq_client.settings, "GROQ_BASE_URL", "http://mock-Groq")
+    monkeypatch.setattr(groq_client.settings, "GROQ_MAX_RETRIES", 0)
+    monkeypatch.setattr(groq_client.settings, "GROQ_TIMEOUT_SECONDS", 30)
 
     mock_client = MagicMock()
     mock_client.is_closed = False
     mock_client.post.side_effect = httpx.ReadTimeout("timed out")
-    monkeypatch.setattr(gemma_client, "_client", mock_client)
+    monkeypatch.setattr(groq_client, "_client", mock_client)
 
     with pytest.raises(httpx.ReadTimeout):
-        gemma_client.chat([{"role": "user", "content": "hi"}], 50)
+        groq_client.chat([{"role": "user", "content": "hi"}], 50)
 
     # Semaphore must have been released — a second call should not hang.
-    sem = gemma_client._get_sync_semaphore()
+    sem = groq_client._get_sync_semaphore()
     acquired = sem.acquire(timeout=1)
     assert acquired is True
     sem.release()
@@ -178,13 +178,13 @@ def _reset_router_client(monkeypatch):
 
 
 def test_router_reuses_same_client_instance(monkeypatch):
-    """Multiple _call_gemma invocations must reuse the same httpx.Client
+    """Multiple _call_Groq invocations must reuse the same httpx.Client
     instance rather than constructing a new one per call."""
-    monkeypatch.setattr(router_service.settings, "GEMMA4_BASE_URL", "http://mock-gemma")
-    monkeypatch.setattr(router_service.settings, "GEMMA4_API_KEY", "")
-    monkeypatch.setattr(router_service.settings, "GEMMA4_MODEL_NAME", "gemma4-test")
-    monkeypatch.setattr(router_service.settings, "GEMMA4_MAX_TOKENS", 100)
-    monkeypatch.setattr(router_service.settings, "GEMMA4_TIMEOUT_SECONDS", 30)
+    monkeypatch.setattr(router_service.settings, "GROQ_BASE_URL", "http://mock-Groq")
+    monkeypatch.setattr(router_service.settings, "GROQ_API_KEY", "")
+    monkeypatch.setattr(router_service.settings, "GROQ_MODEL_NAME", "Groq4-test")
+    monkeypatch.setattr(router_service.settings, "GROQ_MAX_TOKENS", 100)
+    monkeypatch.setattr(router_service.settings, "GROQ_TIMEOUT_SECONDS", 30)
 
     construction_count = {"n": 0}
 
@@ -202,10 +202,10 @@ def test_router_reuses_same_client_instance(monkeypatch):
 
     with patch("app.services.router_service.httpx.Client", side_effect=counting_client):
         client1 = router_service._get_client()
-        router_service._call_gemma("prompt 1")
+        router_service._call_Groq("prompt 1")
         client2 = router_service._get_client()
-        router_service._call_gemma("prompt 2")
-        router_service._call_gemma("prompt 3")
+        router_service._call_Groq("prompt 2")
+        router_service._call_Groq("prompt 3")
 
     assert construction_count["n"] == 1
     assert client1 is client2

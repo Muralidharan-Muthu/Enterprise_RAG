@@ -68,17 +68,17 @@ _ENTITY_INTENT_PROMPT = (
 
 
 def _is_entity_query(query: str) -> bool:
-    """Ask Gemma 4 whether `query` is an entity/relationship question that warrants
+    """Ask Groq whether `query` is an entity/relationship question that warrants
     graph traversal (vs. a plain factual/value lookup).
 
-    Returns False on any failure or when Gemma is not configured, so graph
+    Returns False on any failure or when Groq is not configured, so graph
     augmentation only ever fires on an explicit positive signal — a flaky or
     absent classifier degrades to "no graph", never to spurious graph chunks.
     """
-    if not settings.GEMMA4_BASE_URL:
+    if not settings.GROQ_BASE_URL:
         return False
     try:
-        from app.services.gemma_client import chat
+        from app.services.groq_client import chat
         raw = chat(
             messages=[
                 {"role": "system", "content": _ENTITY_INTENT_PROMPT},
@@ -268,7 +268,7 @@ async def global_search(
 
         # Select communities (try by embedding if possible, else top by summary size)
         communities = []
-        if settings.GEMMA4_BASE_URL:
+        if settings.GROQ_BASE_URL:
             try:
                 from app.services.embedding_service import embed_query
                 q_emb = embed_query(query).tolist()
@@ -283,7 +283,7 @@ async def global_search(
             return _empty
 
         # MAP phase: ask Gemma to answer from each community summary
-        from app.services.gemma_client import chat_async
+        from app.services.groq_client import chat_async
 
         async def _map_community(comm: dict) -> dict | None:
             summary = comm.get("summary", "")

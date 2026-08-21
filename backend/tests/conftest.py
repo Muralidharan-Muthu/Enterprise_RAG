@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 # Load real SUPABASE_* credentials from .env so DB/integration (slow) tests can
-# connect. We only pull SUPABASE_* keys (DB + storage) — Gemma stays unset for
+# connect. We only pull SUPABASE_* keys (DB + storage) — Groq stays unset for
 # unit tests below. Falls back to dummy values when no .env is present (CI).
 for _env in (
     Path(__file__).resolve().parent.parent / ".env",          # backend/.env
@@ -22,7 +22,7 @@ for _env in (
 
 # Dummy fallbacks for unit tests with no .env present
 os.environ.setdefault("SUPABASE_PASSWORD", "test")
-os.environ.setdefault("GEMMA4_BASE_URL", "")
+os.environ.setdefault("GROQ_BASE_URL", "")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 
 

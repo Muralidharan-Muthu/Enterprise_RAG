@@ -3,7 +3,7 @@ Storage service — routes content to Supabase stores by *content type*.
 
 Text routes by document nature:
   policy / entity / financial → vector_store
-  legal                       → clause_store  (with Gemma-enriched metadata)
+  legal                       → clause_store  (with Groq-enriched metadata)
   research                    → document_store
 
 Content streams routed independent of document_type:

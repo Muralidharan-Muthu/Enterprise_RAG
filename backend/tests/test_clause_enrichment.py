@@ -28,7 +28,7 @@ def _clause(idx: int, text: str = "The Vendor shall deliver the goods within 30 
     )
 
 
-def _mock_gemma(content: str):
+def _mock_Groq(content: str):
     """Return a context-manager-compatible httpx mock that returns `content`."""
     resp = MagicMock()
     resp.json.return_value = {"choices": [{"message": {"content": content}}]}
@@ -40,9 +40,9 @@ def _mock_gemma(content: str):
     return client
 
 
-def _mock_gemma_chat(content: str):
-    """Patch target for app.services.clause_enrichment_service.gemma_client.chat
-    that simply returns `content` (mirrors gemma_client.chat's return contract:
+def _mock_Groq_chat(content: str):
+    """Patch target for app.services.clause_enrichment_service.groq_client.chat
+    that simply returns `content` (mirrors groq_client.chat's return contract:
     a stripped string)."""
     return MagicMock(return_value=content)
 
@@ -233,25 +233,25 @@ class TestApply:
 class TestEnrichClausesBatch:
     @pytest.fixture(autouse=True)
     def _mock_settings(self, monkeypatch):
-        """Ensure settings has a valid GEMMA4_BASE_URL for all tests in this class
+        """Ensure settings has a valid GROQ_BASE_URL for all tests in this class
         (unless the test itself overrides it)."""
-        monkeypatch.setattr("app.services.clause_enrichment_service.settings.GEMMA4_BASE_URL", "http://mock-gemma")
-        monkeypatch.setattr("app.services.clause_enrichment_service.settings.GEMMA4_MODEL_NAME", "gemma4-test")
-        monkeypatch.setattr("app.services.clause_enrichment_service.settings.GEMMA4_API_KEY", "")
-        monkeypatch.setattr("app.services.clause_enrichment_service.settings.GEMMA4_TIMEOUT_SECONDS", 30)
+        monkeypatch.setattr("app.services.clause_enrichment_service.settings.GROQ_BASE_URL", "http://mock-Groq")
+        monkeypatch.setattr("app.services.clause_enrichment_service.settings.GROQ_MODEL_NAME", "Groq4-test")
+        monkeypatch.setattr("app.services.clause_enrichment_service.settings.GROQ_API_KEY", "")
+        monkeypatch.setattr("app.services.clause_enrichment_service.settings.GROQ_TIMEOUT_SECONDS", 30)
 
     def test_empty_list_returns_same_empty(self):
         result = enrich_clauses_batch([])
         assert result == []
 
-    def test_no_gemma_url_skips_enrichment(self, monkeypatch):
-        monkeypatch.setattr("app.services.clause_enrichment_service.settings.GEMMA4_BASE_URL", "")
+    def test_no_Groq_url_skips_enrichment(self, monkeypatch):
+        monkeypatch.setattr("app.services.clause_enrichment_service.settings.GROQ_BASE_URL", "")
         clauses = [_clause(0)]
         result = enrich_clauses_batch(clauses)
         assert result[0].clause_type == "general"
         assert result[0].risk_level is None
 
-    @patch("app.services.clause_enrichment_service.gemma_client.chat")
+    @patch("app.services.clause_enrichment_service.groq_client.chat")
     def test_successful_single_clause(self, mock_chat):
         mock_chat.return_value = json.dumps([_enrichment_json()])
         clauses = [_clause(0)]
@@ -262,7 +262,7 @@ class TestEnrichClausesBatch:
         assert result[0].obligor == "Vendor"
         assert result[0].key_dates == {"due": "2025-06-30"}
 
-    @patch("app.services.clause_enrichment_service.gemma_client.chat")
+    @patch("app.services.clause_enrichment_service.groq_client.chat")
     def test_http_error_uses_fallback(self, mock_chat):
         mock_chat.side_effect = httpx.HTTPError("connection refused")
 
@@ -271,15 +271,15 @@ class TestEnrichClausesBatch:
         assert result[0].clause_type == "general"
         assert result[0].risk_level is None
 
-    @patch("app.services.clause_enrichment_service.gemma_client.chat")
-    def test_invalid_json_from_gemma_uses_fallback(self, mock_chat):
+    @patch("app.services.clause_enrichment_service.groq_client.chat")
+    def test_invalid_json_from_Groq_uses_fallback(self, mock_chat):
         mock_chat.return_value = "I cannot process this request."
         clauses = [_clause(0)]
         result = enrich_clauses_batch(clauses)
         assert result[0].clause_type == "general"
 
     @patch("app.services.clause_enrichment_service.time.sleep")
-    @patch("app.services.clause_enrichment_service.gemma_client.chat")
+    @patch("app.services.clause_enrichment_service.groq_client.chat")
     def test_retry_then_success(self, mock_chat, mock_sleep):
         call_count = [0]
         good = json.dumps([_enrichment_json(clause_type="warranty", risk_level="low",
@@ -299,7 +299,7 @@ class TestEnrichClausesBatch:
         assert result[0].clause_type == "warranty"
         assert mock_sleep.called  # retry sleep happened
 
-    @patch("app.services.clause_enrichment_service.gemma_client.chat")
+    @patch("app.services.clause_enrichment_service.groq_client.chat")
     def test_seven_clauses_split_into_two_batches(self, mock_chat):
         """7 clauses → batch of 5 + batch of 2, both enriched."""
         good_5 = json.dumps([_enrichment_json(clause_type="obligation")] * 5)
@@ -320,7 +320,7 @@ class TestEnrichClausesBatch:
         assert all(c.clause_type == "obligation" for c in result)
         assert call_count[0] == 2  # 2 batches
 
-    @patch("app.services.clause_enrichment_service.gemma_client.chat")
+    @patch("app.services.clause_enrichment_service.groq_client.chat")
     def test_one_batch_failure_does_not_affect_others(self, mock_chat):
         """Batch 0 fails, batch 1 succeeds → batch 0 clauses get fallback."""
         call_count = [0]
@@ -342,7 +342,7 @@ class TestEnrichClausesBatch:
         assert types <= {"right", "general"}
         assert "right" in types  # at least one successful batch
 
-    @patch("app.services.clause_enrichment_service.gemma_client.chat")
+    @patch("app.services.clause_enrichment_service.groq_client.chat")
     def test_returns_same_list_instance(self, mock_chat):
         mock_chat.return_value = json.dumps([_enrichment_json()])
         clauses = [_clause(0)]

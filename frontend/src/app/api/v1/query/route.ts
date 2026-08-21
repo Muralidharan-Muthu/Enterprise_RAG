@@ -10,7 +10,7 @@ const BACKEND =
  * can drop long-running connections (~12-20 s for retrieve + rerank +
  * synthesise) with ECONNRESET / "socket hang up".  By handling the proxy
  * ourselves we control the AbortController timeout (120 s here, matching
- * the backend's GEMMA4_TIMEOUT_SECONDS).
+ * the backend's GROQ_TIMEOUT_SECONDS).
  */
 export async function POST(req: NextRequest) {
   const body = await req.text();

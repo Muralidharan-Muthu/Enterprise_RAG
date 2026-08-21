@@ -205,7 +205,7 @@ def related_documents(entity_names: list[str], exclude_doc_id: str | None = None
     shared-mention weight. Excludes `exclude_doc_id`. Returns [] when graph is down.
 
     Matching is fuzzy (substring, either direction) rather than exact-key
-    equality: query-time NER and ingestion-time NER are two independent Gemma
+    equality: query-time NER and ingestion-time NER are two independent Groq
     calls and routinely phrase the SAME real-world entity slightly differently
     ("EAM" at ingestion vs "EAM system" in a question, or "Element 8" vs the
     full heading "Element 8. Identification of Resources (E8)"). Exact equality

@@ -196,7 +196,7 @@ def _chunk_semantic_breakpoint(logical_units: list[_LogicalUnit]) -> list[Chunk]
     5. Return final Chunk dataclass list.
     """
     from app.services import semantic_chunker as _sc
-    from app.services import gemma_client
+    from app.services import groq_client
 
     # Lazy import of BGE embed function — already warm in the worker; avoids
     # loading the 1.3 GB model in API processes that import chunker.
@@ -241,17 +241,17 @@ def _chunk_semantic_breakpoint(logical_units: list[_LogicalUnit]) -> list[Chunk]
     if not raw_chunks:
         return []
 
-    # ── Gemma enrichment ──────────────────────────────────────────────────────
+    # ── Groq enrichment ───────────────────────────────────────────────────────
     # Collect plain texts (no prefix) for the enrichment prompts.
     core_texts = [rc.text for rc in raw_chunks]
     section_paths = [rc.section_path for rc in raw_chunks]
     block_types_list = [rc.block_types for rc in raw_chunks]
 
-    enrichments = _sc.enrich_chunks_with_gemma(
+    enrichments = _sc.enrich_chunks_with_groq(
         chunk_texts=core_texts,
         section_paths=section_paths,
         block_types_list=block_types_list,
-        gemma_chat_fn=gemma_client.chat,
+        groq_chat_fn=groq_client.chat,
         batch_size=batch_size,
     )
 
@@ -291,7 +291,7 @@ def _chunk_semantic_breakpoint(logical_units: list[_LogicalUnit]) -> list[Chunk]
                 "block_types": list(set(rc.block_types)),
                 "has_image_content": rc.is_image_analysis,
                 "overlap_applied": False,   # semantic path has no overlap
-                "enriched_by_gemma": bool(enrichment.get("section_title")),
+                "enriched_by_groq": bool(enrichment.get("section_title")),
             },
         ))
 

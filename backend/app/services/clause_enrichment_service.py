@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.config import settings
 from app.models.document import LegalClause
-from app.services import gemma_client
+from app.services import groq_client
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +35,10 @@ MAX_RETRIES = 2     # per batch before giving up
 RETRY_DELAY = 1.0   # seconds; multiplied by attempt number (linear backoff)
 
 # Belt-and-suspenders: the ThreadPoolExecutor below can never spawn more workers
-# than the process-wide Gemma concurrency cap (gemma_client._get_sync_semaphore
+# than the process-wide Gemma concurrency cap (groq_client._get_sync_semaphore
 # already enforces this globally, but capping the pool size avoids threads
 # piling up blocked on semaphore.acquire()).
-_EFFECTIVE_MAX_WORKERS = max(1, min(MAX_WORKERS, getattr(settings, "GEMMA4_MAX_CONCURRENT", MAX_WORKERS) or 1))
+_EFFECTIVE_MAX_WORKERS = max(1, min(MAX_WORKERS, getattr(settings, "GROQ_MAX_CONCURRENT", MAX_WORKERS) or 1))
 
 VALID_CLAUSE_TYPES = frozenset({
     "obligation", "prohibition", "right", "definition", "liability",
@@ -119,8 +119,8 @@ def enrich_clauses_batch(clauses: list[LegalClause]) -> list[LegalClause]:
     No-op when Gemma is not configured. Never raises."""
     if not clauses:
         return clauses
-    if not getattr(settings, "GEMMA4_BASE_URL", None):
-        logger.info("GEMMA4_BASE_URL not set — skipping clause enrichment")
+    if not getattr(settings, "GROQ_BASE_URL", None):
+        logger.info("GROQ_BASE_URL not set — skipping clause enrichment")
         return clauses
 
     batches = [clauses[i : i + BATCH_SIZE] for i in range(0, len(clauses), BATCH_SIZE)]
@@ -150,7 +150,7 @@ def enrich_clauses_batch(clauses: list[LegalClause]) -> list[LegalClause]:
 # ── Internal helpers ───────────────────────────────────────────────────────────
 
 def _enrich_one_batch(clauses: list[LegalClause]) -> list[ClauseEnrichmentResult]:
-    """Single batch: call Gemma with retries. Returns fallback list on failure."""
+    """Single batch: call Groq with retries. Returns fallback list on failure."""
     numbered = "\n\n".join(
         f"[Clause {i + 1}]\n{c.clause_text[:1500]}"
         for i, c in enumerate(clauses)
@@ -158,7 +158,7 @@ def _enrich_one_batch(clauses: list[LegalClause]) -> list[ClauseEnrichmentResult
     last_exc: Optional[Exception] = None
     for attempt in range(MAX_RETRIES + 1):
         try:
-            raw = _call_gemma(numbered, len(clauses))
+            raw = _call_groq(numbered, len(clauses))
             parsed = _parse_response(raw, len(clauses))
             if parsed is not None:
                 return parsed
@@ -176,25 +176,29 @@ def _enrich_one_batch(clauses: list[LegalClause]) -> list[ClauseEnrichmentResult
     return [_FALLBACK] * len(clauses)
 
 
-def _call_gemma(text: str, expected_count: int) -> str:
-    """Delegates to the shared gemma_client.chat(), which pools connections and
-    gates every sync/thread caller behind the process-wide GEMMA4_MAX_CONCURRENT
+def _call_groq(text: str, expected_count: int) -> str:
+    """Delegates to the shared groq_client.chat(), which pools connections and
+    gates every sync/thread caller behind the process-wide GROQ_MAX_CONCURRENT
     semaphore. retries=0 preserves this module's own outer retry loop
     (_enrich_one_batch already retries MAX_RETRIES times)."""
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {"role": "user", "content": text},
     ]
-    return gemma_client.chat(
+    return groq_client.chat(
         messages,
         max_tokens=350 * expected_count,
         temperature=0.0,
         retries=0,
         # Batched multi-clause prompts generate far more than a single answer;
         # keep the original 2x read budget so large batches don't spuriously time out.
-        timeout=(settings.GROQ_TIMEOUT_SECONDS or settings.GEMMA4_TIMEOUT_SECONDS or 60) * 2,
+        timeout=(settings.GROQ_TIMEOUT_SECONDS or 60) * 2,
         model=settings.GROQ_ENRICHMENT_MODEL,
     )
+
+
+# Backward-compat alias
+_call_gemma = _call_groq
 
 
 def _parse_response(raw: str, expected_count: int) -> Optional[list[ClauseEnrichmentResult]]:

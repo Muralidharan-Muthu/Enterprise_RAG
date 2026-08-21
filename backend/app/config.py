@@ -37,20 +37,11 @@ class Settings(BaseSettings):
     GROQ_MAX_TOKENS: int = 800               # max output tokens per answer
     GROQ_MAX_CONCURRENT: int = 5
 
-    # Backward-compatibility GEMMA4_* aliases
-    GEMMA4_BASE_URL: str = ""
-    GEMMA4_API_KEY: str = ""
-    GEMMA4_MODEL_NAME: str = ""
-    GEMMA4_TIMEOUT_SECONDS: int | None = None
-    GEMMA4_CONNECT_TIMEOUT_SECONDS: int | None = None
-    GEMMA4_MAX_RETRIES: int | None = None
-    GEMMA4_MAX_TOKENS: int | None = None
-    GEMMA4_MAX_CONCURRENT: int | None = None
     # Use the LLM to classify query intent (which stores to search). Off by
-    # default: it adds a full Gemma round-trip on the critical path, and the
+    # default: it adds a full Groq round-trip on the critical path, and the
     # rule-based fallback is instant and recall-safe (searches all stores when
     # ambiguous). Turn on only if store routing precision matters more than latency.
-    # With INTENT_USE_SEMANTIC_ROUTER on (default), Gemma is only ever reached
+    # With INTENT_USE_SEMANTIC_ROUTER on (default), Groq is only ever reached
     # as the last-resort tier for queries neither rules nor the embedding
     # router could confidently classify — see intent_service.classify_intent.
     INTENT_USE_LLM: bool = True
@@ -86,7 +77,7 @@ class Settings(BaseSettings):
     # is_available() returns False when NEO4J_URI/credentials are unset or the
     # server is unreachable, so BOTH query-time routing and ingestion-time
     # extraction no-op gracefully (one connectivity check, then skipped) with no
-    # errors and no wasted Gemma calls. To actually populate/query the graph,
+    # errors and no wasted Groq calls. To actually populate/query the graph,
     # set NEO4J_URI + NEO4J_USERNAME/PASSWORD/DATABASE to a reachable instance.
     # For Neo4j Aura: URI is neo4j+s://<id>.databases.neo4j.io,
     # NEO4J_USERNAME and NEO4J_DATABASE are both the instance ID.
@@ -167,7 +158,7 @@ class Settings(BaseSettings):
     # Hard ceiling on chunk size (tokens).  Chunks that exceed this are
     # force-split at the next-best interior breakpoint.
     CHUNK_MAX_TOKENS: int = 1024
-    # How many chunks to send to Gemma per enrichment call.  Larger batches
+    # How many chunks to send to Groq per enrichment call.  Larger batches
     # reduce API round-trips; smaller batches lower per-call latency variance.
     CHUNK_ENRICH_BATCH_SIZE: int = 8
 
@@ -232,8 +223,8 @@ class Settings(BaseSettings):
     # the CDAC endpoint while still overlapping the per-image latency. 1 = sequential.
     VLM_MAX_CONCURRENCY: int = 4
     # Max output tokens for the per-image VLM extraction call (image_analysis_service).
-    # Kept separate from GEMMA4_MAX_TOKENS (used by query-answer synthesis, a different
-    # call site with different needs). GEMMA4_MAX_TOKENS's own comment notes 2048
+    # Kept separate from GROQ_MAX_TOKENS (used by query-answer synthesis, a different
+    # call site with different needs). GROQ_MAX_TOKENS's own comment notes 2048
     # already caused ~3x latency on this backend — the image call previously hardcoded
     # 4096, which measured at ~293s/image (24+ min for a 5-image document).
     VLM_MAX_TOKENS: int = 1536
@@ -244,7 +235,7 @@ class Settings(BaseSettings):
     # regression). False restores the pre-VLM table-crop behaviour.
     TABLE_VLM_RECONSTRUCT: bool = True
     # Max characters of retrieved context assembled into a synthesis prompt. Keeps
-    # the Gemma prompt within a safe context budget (~4 chars/token heuristic).
+    # the Groq prompt within a safe context budget (~4 chars/token heuristic).
     SYNTHESIS_CONTEXT_MAX_CHARS: int = 12000
 
     # ── Context compression (extractive, accuracy-first) ──────
@@ -355,7 +346,7 @@ class Settings(BaseSettings):
     GRAPHRAG_EXTRACT_PER_CHUNK: bool = True
     # Beyond this many chunks, fall back to doc-level extraction (cost ceiling).
     GRAPHRAG_MAX_CHUNKS_PER_DOC: int = 200
-    # Worker-side ThreadPoolExecutor concurrency for parallel Gemma extraction calls.
+    # Worker-side ThreadPoolExecutor concurrency for parallel Groq extraction calls.
     GRAPHRAG_EXTRACT_CONCURRENCY: int = 4
     # Max entities to extract per chunk (or per doc in fallback mode).
     GRAPHRAG_ENTITIES_PER_CHUNK: int = 15
@@ -370,15 +361,15 @@ class Settings(BaseSettings):
     GRAPHRAG_COMMUNITY_DIRTY_DOCS: int = 25
     # Single-flight lock TTL (seconds). Only one recompute runs at a time; any
     # duplicate or redelivered task within this window skips immediately instead
-    # of re-running the (expensive, per-community Gemma) summarization. Must be
+    # of re-running the (expensive, per-community Groq) summarization. Must be
     # long enough to cover one full rebuild; auto-expires if the holder crashes.
     GRAPHRAG_COMMUNITY_LOCK_TTL_SEC: int = 900
     # Only communities with at least this many member entities get an LLM
     # summary; smaller ones (singletons/pairs — common with fragmented
-    # partitions) get a cheap member-list summary with NO Gemma call. This is
+    # partitions) get a cheap member-list summary with NO Groq call. This is
     # the main lever that keeps a recompute from firing one call per community.
     GRAPHRAG_COMMUNITY_MIN_SIZE: int = 3
-    # Hard ceiling on Gemma summaries per recompute run. The largest communities
+    # Hard ceiling on Groq summaries per recompute run. The largest communities
     # are summarized first; the rest fall back to the cheap member-list summary.
     GRAPHRAG_COMMUNITY_MAX_SUMMARIES: int = 40
     # Hops to traverse in local neighborhood search (2 = entity + up to 2-hop neighbours
@@ -465,15 +456,7 @@ class Settings(BaseSettings):
         self.GROQ_ENRICHMENT_MODEL = (self.GROQ_ENRICHMENT_MODEL or self.GROQ_MODEL_NAME).strip()
         self.GROQ_CHAT_MODEL = (self.GROQ_CHAT_MODEL or self.GROQ_MODEL_NAME).strip()
 
-        # Synchronize GEMMA4 legacy aliases with GROQ settings
-        self.GEMMA4_API_KEY = self.GROQ_API_KEY
-        self.GEMMA4_BASE_URL = self.GROQ_BASE_URL
-        self.GEMMA4_MODEL_NAME = self.GROQ_MODEL_NAME
-        self.GEMMA4_TIMEOUT_SECONDS = self.GROQ_TIMEOUT_SECONDS
-        self.GEMMA4_CONNECT_TIMEOUT_SECONDS = self.GROQ_CONNECT_TIMEOUT_SECONDS
-        self.GEMMA4_MAX_RETRIES = self.GROQ_MAX_RETRIES
-        self.GEMMA4_MAX_TOKENS = self.GROQ_MAX_TOKENS
-        self.GEMMA4_MAX_CONCURRENT = self.GROQ_MAX_CONCURRENT
+
 
     @property
     def max_upload_bytes(self) -> int:

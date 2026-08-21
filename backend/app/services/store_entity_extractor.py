@@ -7,7 +7,7 @@ text chunks from whichever single store a document's doc_type maps to
 image_store rows are silently skipped, leaving rich entity signal on the floor.
 
 This service adds store-aware record readers and a unified extraction driver
-that feeds those records through the same Gemma NER + upsert_entity_graph()
+that feeds those records through the same Groq NER + upsert_entity_graph()
 path already used for text chunks.
 
 Public API
@@ -27,7 +27,7 @@ read_text_store_records(document_id, store)
     but is callable from outside that module.
 
 extract_stores_for_document(document_id, filename, doc_type, stores)
-    Run Gemma NER + relationship extraction on records from the given stores and
+    Run Groq NER + relationship extraction on records from the given stores and
     upsert the results into Neo4j. Parallel via ThreadPoolExecutor (respects
     GRAPHRAG_EXTRACT_CONCURRENCY). Returns a counts dict.
 
@@ -239,7 +239,7 @@ def extract_stores_for_document(
     """Extract entities + relationships from the given stores and upsert to Neo4j.
 
     stores: list of store names to process, e.g. ["table_store", "image_store"].
-    Each valid store name is read, run through Gemma NER in parallel, and
+    Each valid store name is read, run through Groq NER in parallel, and
     upserted via graph_service.upsert_entity_graph().
 
     Returns:
@@ -306,7 +306,7 @@ def extract_stores_for_document(
         document_id, len(all_records), stores, concurrency,
     )
 
-    # Parallel Gemma extraction
+    # Parallel Groq extraction
     results: list[tuple[dict, dict]] = []
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
         futures = {

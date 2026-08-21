@@ -1,13 +1,13 @@
 """
-Gemma-first legal clause extraction.
+Groq-first legal clause extraction.
 
-Primary path  → Gemma extracts clause boundaries AND all metadata in one pass per segment.
-Fallback path → regex extract_legal_clauses() when Gemma is unavailable, times out, or
+Primary path  → Groq extracts clause boundaries AND all metadata in one pass per segment.
+Fallback path â†’ regex extract_legal_clauses() when Groq is unavailable, times out, or
                 too many segments fail.
 
 Caller checks ExtractionMeta.source:
-  "gemma"  → LegalClause list fully populated; no further enrichment needed.
-  "regex"  → structural fields only; caller should run enrich_clauses_batch() next.
+  "groq"  â†’ LegalClause list fully populated; no further enrichment needed.
+  "regex"  â†’ structural fields only; caller should run enrich_clauses_batch() next.
 
 Document segmentation strategy:
   Split on text_block boundaries (Docling output) up to MAX_SEGMENT_CHARS each,
@@ -18,13 +18,13 @@ Document segmentation strategy:
 Under-extraction safety net (coverage check):
   A long, heading-dense segment (many short un-numbered policy-statement-style
   sub-headings, as opposed to sparse numbered "N. Title" legal clauses) can cause
-  Gemma to enumerate only some of the segment's distinct sections and silently
-  drop the rest — no error, no malformed JSON, just an incomplete-but-valid
+  Groq to enumerate only some of the segment's distinct sections and silently
+  drop the rest â€” no error, no malformed JSON, just an incomplete-but-valid
   response. _segment_coverage() estimates how much of the segment's text the
   returned clauses actually account for; a low ratio triggers one corrective
   retry (_retry_low_coverage_segment) that explicitly calls out the shortfall and
   merges the union of both passes. This is a real, measured problem class (not
-  hypothetical) — see test_gemma_clause_extractor.py's coverage-retry tests.
+  hypothetical) â€” see test_groq_clause_extractor.py's coverage-retry tests.
 """
 import json
 import logging
@@ -45,18 +45,18 @@ logger = logging.getLogger(__name__)
 MAX_SEGMENT_CHARS = 5_000   # ~1 250 tokens; smaller segments -> fewer distinct
                             # headings per call -> less enumeration undercounting
 MIN_CLAUSES_EXPECTED = 1    # fewer than this triggers fallback (sanity check)
-MAX_FAILED_RATIO = 0.5      # >50% segments failing → fallback
+MAX_FAILED_RATIO = 0.5      # >50% segments failing â†’ fallback
 MAX_RETRIES = 2
-RETRY_DELAY = 1.0           # linear backoff: attempt × RETRY_DELAY
-SEGMENT_MAX_TOKENS = 6_000  # response budget per segment (was 4096 — too tight for
+RETRY_DELAY = 1.0           # linear backoff: attempt Ã— RETRY_DELAY
+SEGMENT_MAX_TOKENS = 6_000  # response budget per segment (was 4096 â€” too tight for
                             # a segment with several fully-detailed clause objects)
 MIN_SEGMENT_COVERAGE = 0.55 # below this fraction of segment text "explained" by the
                             # extracted clauses, assume under-extraction and retry once
 
 
-# ── Response schema ────────────────────────────────────────────────────────────
+# â”€â”€ Response schema â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-class _GemmaClause(BaseModel):
+class _GroqClause(BaseModel):
     clause_number: Optional[str] = None
     clause_title: Optional[str] = None
     clause_text: str
@@ -99,29 +99,29 @@ class _GemmaClause(BaseModel):
 
 @dataclass
 class ExtractionMeta:
-    source: str                       # "gemma" | "regex"
+    source: str                       # "groq" | "regex"
     segment_count: int = 0
     failed_segments: int = 0
     extracted_count: int = 0
     fallback_reason: Optional[str] = None
 
 
-# ── System prompt ──────────────────────────────────────────────────────────────
+# â”€â”€ System prompt â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 _SYSTEM_PROMPT = (
     "You are a legal clause extractor for enterprise contracts. "
     "Given a segment of a legal document, extract EVERY distinct clause or section "
-    "present — do not skip any.\n\n"
+    "present â€” do not skip any.\n\n"
     "A 'clause' is not limited to numbered legal clauses like \"12.3 Indemnification\". "
-    "It also includes un-numbered sub-headings — bold text, underlined text, or short "
+    "It also includes un-numbered sub-headings â€” bold text, underlined text, or short "
     "standalone titles such as \"Data Retention Policy\" or \"Vendor Management Policy\" "
-    "— even when they have no number and even when several appear close together under "
+    "â€” even when they have no number and even when several appear close together under "
     "a shared parent heading (e.g. multiple policy statements listed one after another "
     "under a \"Section A\" heading). Extract the PARENT heading itself as its own clause "
     "too (clause_text = its own intro text, or empty if it is a bare heading with no "
     "text of its own), in addition to each of its sub-headings.\n"
-    "If a segment contains many short sections, this makes it MORE important — not "
-    "less — that you list all of them: do not stop early or summarize a run of short "
+    "If a segment contains many short sections, this makes it MORE important â€” not "
+    "less â€” that you list all of them: do not stop early or summarize a run of short "
     "sections as one entry. Count the distinct headings in the segment before you "
     "answer, and make sure your output has that many entries.\n\n"
     "For each clause return a JSON object with EXACTLY these keys "
@@ -137,31 +137,31 @@ _SYSTEM_PROMPT = (
     '  "obligor":           string | null  (party bearing the primary obligation)\n'
     '  "obligee":           string | null  (party receiving the primary benefit)\n'
     '  "parties_mentioned": [string]       (all named parties; empty list if none)\n'
-    '  "key_dates":         {}             (label → ISO-8601 date)\n'
+    '  "key_dates":         {}             (label â†’ ISO-8601 date)\n'
     '  "monetary_values":   []             (list of {"amount": number, "currency": "ISO-4217", "description": string})\n\n'
     'Return ONLY: {"clauses": [...]}\n'
     "No markdown fences, no explanation, no trailing text."
 )
 
 
-# ── Public entry point ─────────────────────────────────────────────────────────
+# â”€â”€ Public entry point â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-def extract_clauses_gemma(
+def extract_clauses_groq(
     parsed_doc: ParsedDocument,
 ) -> tuple[list[LegalClause], ExtractionMeta]:
     """
-    Gemma-first extraction. Returns (clauses, meta). Never raises.
+    Groq-first extraction. Returns (clauses, meta). Never raises.
 
-    meta.source == "gemma"  → clauses fully enriched, store directly.
-    meta.source == "regex"  → structural fields only, call enrich_clauses_batch() next.
+    meta.source == "groq"  â†’ clauses fully enriched, store directly.
+    meta.source == "regex"  â†’ structural fields only, call enrich_clauses_batch() next.
     """
-    if not getattr(settings, "GEMMA4_BASE_URL", None):
-        return _regex_fallback(parsed_doc, "GEMMA4_BASE_URL not configured")
+    if not getattr(settings, "GROQ_BASE_URL", None):
+        return _regex_fallback(parsed_doc, "GROQ_BASE_URL not configured")
 
     segments = _build_segments(parsed_doc)
-    meta = ExtractionMeta(source="gemma", segment_count=len(segments))
+    meta = ExtractionMeta(source="groq", segment_count=len(segments))
 
-    all_pairs: list[tuple[_GemmaClause, int]] = []  # (clause, start_page)
+    all_pairs: list[tuple[_GroqClause, int]] = []  # (clause, start_page)
     for seg_idx, (seg_text, seg_page) in enumerate(segments):
         result = _extract_segment(seg_text, seg_page, seg_idx)
         if result is None:
@@ -188,17 +188,17 @@ def extract_clauses_gemma(
     meta.extracted_count = len(stitched)
     legal_clauses = [_to_legal_clause(i, gc, pages) for i, (gc, pages) in enumerate(stitched)]
     logger.info(
-        "[gemma_extractor] %d clauses from %d segments (%d failed, %d deduped, %d stitched)",
+        "[groq_extractor] %d clauses from %d segments (%d failed, %d deduped, %d stitched)",
         len(legal_clauses), len(segments), meta.failed_segments,
         len(all_pairs) - len(deduped), len(deduped) - len(stitched),
     )
     return legal_clauses, meta
 
 
-# ── Document segmentation ──────────────────────────────────────────────────────
+# â”€â”€ Document segmentation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _build_segments(parsed_doc: ParsedDocument) -> list[tuple[str, int]]:
-    """Return (text, start_page) tuples sized ≤ MAX_SEGMENT_CHARS with block overlap."""
+    """Return (text, start_page) tuples sized â‰¤ MAX_SEGMENT_CHARS with block overlap."""
     if parsed_doc.text_blocks:
         return _segment_from_blocks(parsed_doc)
     return _segment_from_raw(parsed_doc.raw_text or "")
@@ -249,52 +249,52 @@ def _segment_from_raw(raw: str) -> list[tuple[str, int]]:
     return segments or [("", 1)]
 
 
-# ── Gemma call per segment ─────────────────────────────────────────────────────
+# ── Groq call per segment ─────────────────────────────────────────────────────
 
 def _extract_segment(
     text: str,
     start_page: int,
     seg_idx: int,
-) -> Optional[list[_GemmaClause]]:
-    """Call Gemma for one segment with retries. Returns None on total failure.
+) -> Optional[list[_GroqClause]]:
+    """Call Groq for one segment with retries. Returns None on total failure.
 
     A parsed-but-suspiciously-thin result (see _segment_coverage) triggers one
-    additional corrective retry before returning — see module docstring."""
+    additional corrective retry before returning â€” see module docstring."""
     last_exc: Optional[Exception] = None
     for attempt in range(MAX_RETRIES + 1):
         try:
-            raw = _call_gemma(text, start_page)
-            parsed = _parse_gemma_response(raw)
+            raw = _call_groq(text, start_page)
+            parsed = _parse_groq_response(raw)
             if parsed is not None:
                 coverage = _segment_coverage(text, parsed)
                 if coverage < MIN_SEGMENT_COVERAGE:
                     logger.info(
-                        "[gemma_extractor] seg %d low coverage (%.0f%%, %d clauses) — "
+                        "[groq_extractor] seg %d low coverage (%.0f%%, %d clauses) â€” "
                         "retrying with corrective nudge",
                         seg_idx, coverage * 100, len(parsed),
                     )
                     parsed = _retry_low_coverage_segment(text, start_page, parsed) or parsed
                 return parsed
-            logger.debug("[gemma_extractor] seg %d parse fail, attempt %d", seg_idx, attempt)
+            logger.debug("[groq_extractor] seg %d parse fail, attempt %d", seg_idx, attempt)
         except Exception as exc:
             last_exc = exc
-            logger.debug("[gemma_extractor] seg %d error, attempt %d: %s", seg_idx, attempt, exc)
+            logger.debug("[groq_extractor] seg %d error, attempt %d: %s", seg_idx, attempt, exc)
         if attempt < MAX_RETRIES:
             time.sleep(RETRY_DELAY * (attempt + 1))
 
     logger.warning(
-        "[gemma_extractor] seg %d failed after %d retries: %s", seg_idx, MAX_RETRIES, last_exc
+        "[groq_extractor] seg %d failed after %d retries: %s", seg_idx, MAX_RETRIES, last_exc
     )
     return None
 
 
-def _segment_coverage(segment_text: str, clauses: list[_GemmaClause]) -> float:
+def _segment_coverage(segment_text: str, clauses: list[_GroqClause]) -> float:
     """Rough diagnostic: fraction of the segment's normalized text length accounted
     for by the extracted clauses' text. Not exact (clause_text may be lightly
-    reworded), but a large shortfall reliably flags under-extraction — e.g. Gemma
+    reworded), but a large shortfall reliably flags under-extraction â€” e.g. Groq
     enumerating only the last item(s) of a long, dense segment and silently
     dropping earlier un-numbered headings (the "Section A" bug this guards against:
-    3 of 4 sibling policy statements — plus the section heading itself — were
+    3 of 4 sibling policy statements â€” plus the section heading itself â€” were
     dropped while only the last one, "Vendor Management Policy", survived)."""
     seg_len = len(re.sub(r"\s+", " ", segment_text).strip())
     if seg_len == 0:
@@ -304,17 +304,17 @@ def _segment_coverage(segment_text: str, clauses: list[_GemmaClause]) -> float:
 
 
 def _retry_low_coverage_segment(
-    text: str, start_page: int, first_pass: list[_GemmaClause],
-) -> Optional[list[_GemmaClause]]:
+    text: str, start_page: int, first_pass: list[_GroqClause],
+) -> Optional[list[_GroqClause]]:
     """One corrective retry when the first pass covers too little of the segment.
     Merges the union of both passes (deduped) so a partially-improved retry still
     keeps anything the first pass already got right. Returns None (caller keeps
     the first pass) if the retry itself fails or parses to nothing."""
     try:
-        raw = _call_gemma_corrective(text, start_page, len(first_pass))
-        second_pass = _parse_gemma_response(raw)
+        raw = _call_groq_corrective(text, start_page, len(first_pass))
+        second_pass = _parse_groq_response(raw)
     except Exception as exc:
-        logger.debug("[gemma_extractor] corrective retry failed: %s", exc)
+        logger.debug("[groq_extractor] corrective retry failed: %s", exc)
         return None
     if not second_pass:
         return None
@@ -324,17 +324,17 @@ def _retry_low_coverage_segment(
     return [c for c, _ in combined]
 
 
-def _gemma_headers() -> dict:
+def _groq_headers() -> dict:
     headers = {"Content-Type": "application/json"}
-    if getattr(settings, "GEMMA4_API_KEY", None):
-        headers["Authorization"] = f"Bearer {settings.GEMMA4_API_KEY}"
+    if getattr(settings, "GROQ_API_KEY", None):
+        headers["Authorization"] = f"Bearer {settings.GROQ_API_KEY}"
     return headers
 
 
-def _call_gemma(text: str, start_page: int) -> str:
-    base = settings.GEMMA4_BASE_URL.rstrip("/")
+def _call_groq(text: str, start_page: int) -> str:
+    base = settings.GROQ_BASE_URL.rstrip("/")
     payload = {
-        "model": settings.GEMMA4_MODEL_NAME,
+        "model": settings.GROQ_MODEL_NAME,
         "messages": [
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": f"[Document segment starting at page {start_page}]\n\n{text}"},
@@ -342,21 +342,21 @@ def _call_gemma(text: str, start_page: int) -> str:
         "max_tokens": SEGMENT_MAX_TOKENS,
         "temperature": 0.0,
     }
-    timeout = getattr(settings, "GEMMA4_TIMEOUT_SECONDS", 30) * 2
+    timeout = getattr(settings, "GROQ_TIMEOUT_SECONDS", 30) * 2
     with httpx.Client(timeout=timeout) as client:
-        resp = client.post(f"{base}/chat/completions", json=payload, headers=_gemma_headers())
+        resp = client.post(f"{base}/chat/completions", json=payload, headers=_groq_headers())
         resp.raise_for_status()
     return resp.json()["choices"][0]["message"]["content"]
 
 
-def _call_gemma_corrective(text: str, start_page: int, first_pass_count: int) -> str:
-    """Re-ask Gemma for the same segment, explicitly calling out that the first
+def _call_groq_corrective(text: str, start_page: int, first_pass_count: int) -> str:
+    """Re-ask Groq for the same segment, explicitly calling out that the first
     pass looked incomplete. Framed as a follow-up turn (not a fresh prompt) so
-    Gemma sees its own thin answer and is pushed to reconsider it specifically,
+    Groq sees its own thin answer and is pushed to reconsider it specifically,
     rather than just re-rolling the same extraction."""
-    base = settings.GEMMA4_BASE_URL.rstrip("/")
+    base = settings.GROQ_BASE_URL.rstrip("/")
     payload = {
-        "model": settings.GEMMA4_MODEL_NAME,
+        "model": settings.GROQ_MODEL_NAME,
         "messages": [
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": f"[Document segment starting at page {start_page}]\n\n{text}"},
@@ -375,14 +375,14 @@ def _call_gemma_corrective(text: str, start_page: int, first_pass_count: int) ->
         "max_tokens": SEGMENT_MAX_TOKENS,
         "temperature": 0.0,
     }
-    timeout = getattr(settings, "GEMMA4_TIMEOUT_SECONDS", 30) * 2
+    timeout = getattr(settings, "GROQ_TIMEOUT_SECONDS", 30) * 2
     with httpx.Client(timeout=timeout) as client:
-        resp = client.post(f"{base}/chat/completions", json=payload, headers=_gemma_headers())
+        resp = client.post(f"{base}/chat/completions", json=payload, headers=_groq_headers())
         resp.raise_for_status()
     return resp.json()["choices"][0]["message"]["content"]
 
 
-def _parse_gemma_response(raw: str) -> Optional[list[_GemmaClause]]:
+def _parse_groq_response(raw: str) -> Optional[list[_GroqClause]]:
     cleaned = re.sub(r"```(?:json)?", "", raw or "").strip().rstrip("`").strip()
     try:
         obj = json.loads(cleaned)
@@ -401,22 +401,22 @@ def _parse_gemma_response(raw: str) -> Optional[list[_GemmaClause]]:
     if not isinstance(raw_list, list):
         return None
 
-    out: list[_GemmaClause] = []
+    out: list[_GroqClause] = []
     for item in raw_list:
         if not isinstance(item, dict):
             continue
         if not str(item.get("clause_text", "")).strip():
             continue
         try:
-            out.append(_GemmaClause(**item))
+            out.append(_GroqClause(**item))
         except Exception:
             pass
     return out  # empty list is valid (segment genuinely has no clauses)
 
 
-# ── Deduplication ──────────────────────────────────────────────────────────────
+# ── Deduplication ────────────────────────────────────────────────────────────
 
-def _fingerprint(gc: _GemmaClause) -> str:
+def _fingerprint(gc: _GroqClause) -> str:
     """Stable dedup key: clause_number (preferred) or first-120-char text hash."""
     if gc.clause_number and gc.clause_number.strip():
         return f"num:{gc.clause_number.strip().lower()}"
@@ -425,10 +425,10 @@ def _fingerprint(gc: _GemmaClause) -> str:
 
 
 def _dedup_pairs(
-    pairs: list[tuple[_GemmaClause, int]]
-) -> list[tuple[_GemmaClause, int]]:
+    pairs: list[tuple[_GroqClause, int]]
+) -> list[tuple[_GroqClause, int]]:
     seen: set[str] = set()
-    out: list[tuple[_GemmaClause, int]] = []
+    out: list[tuple[_GroqClause, int]] = []
     for gc, page in pairs:
         fp = _fingerprint(gc)
         if fp not in seen:
@@ -437,29 +437,29 @@ def _dedup_pairs(
     return out
 
 
-# ── Cross-page/segment continuation stitching ──────────────────────────────────
+# ── Cross-page/segment continuation stitching ────────────────────────────────
 
 def _stitch_continuations(
-    pairs: list[tuple[_GemmaClause, int]],
-) -> list[tuple[_GemmaClause, list[int]]]:
+    pairs: list[tuple[_GroqClause, int]],
+) -> list[tuple[_GroqClause, list[int]]]:
     """Merge a headerless clause fragment (no clause_number AND no clause_title) into
     the immediately preceding titled clause when it is a direct textual continuation.
 
     The common trigger: a clause's tail spills across a page boundary, and Docling
     inserts the page's running header/footer text between the clause body and its
-    continuation. That noise sits between the two in the segment text Gemma sees, so
-    Gemma — correctly, from its narrow per-segment view — returns the tail as its own
+    continuation. That noise sits between the two in the segment text Groq sees, so
+    Groq — correctly, from its narrow per-segment view — returns the tail as its own
     unlabeled clause instead of recognizing it as part of the preceding one. This pass
-    catches that after extraction, using a small Gemma classification call per orphan
-    (rare — only fires at genuine page/segment-boundary splits, not on every clause).
+    catches that after extraction, using a small Groq classification call per orphan
+    (rare â€” only fires at genuine page/segment-boundary splits, not on every clause).
 
-    Fails open to "merge" if Gemma is unreachable: a genuinely freestanding unlabeled
+    Fails open to "merge" if Groq is unreachable: a genuinely freestanding unlabeled
     clause is extremely unlikely in a document where every real clause already
     follows the "N. Title" convention this extractor relies on end to end.
     """
     if not pairs:
         return []
-    stitched: list[tuple[_GemmaClause, list[int]]] = [(pairs[0][0], [pairs[0][1]])]
+    stitched: list[tuple[_GroqClause, list[int]]] = [(pairs[0][0], [pairs[0][1]])]
     for gc, page in pairs[1:]:
         prev_gc, prev_pages = stitched[-1]
         is_orphan_fragment = (
@@ -471,7 +471,7 @@ def _stitch_continuations(
             if page not in prev_pages:
                 prev_pages.append(page)
             logger.info(
-                "[gemma_extractor] Stitched orphan continuation (page %s) into clause %r",
+                "[groq_extractor] Stitched orphan continuation (page %s) into clause %r",
                 page, prev_gc.clause_number or prev_gc.clause_title or "(untitled)",
             )
         else:
@@ -480,22 +480,22 @@ def _stitch_continuations(
 
 
 def _is_continuation(prev_text: str, fragment_text: str) -> bool:
-    """Ask Gemma whether fragment_text is the direct continuation of prev_text (the
+    """Ask Groq whether fragment_text is the direct continuation of prev_text (the
     tail of the preceding clause) rather than the start of an unrelated clause.
-    Fails open to True — see _stitch_continuations for why that default is safe here.
+    Fails open to True â€” see _stitch_continuations for why that default is safe here.
     """
     try:
         tail = prev_text[-400:]
         head = fragment_text[:400]
         payload = {
-            "model": settings.GEMMA4_MODEL_NAME,
+            "model": settings.GROQ_MODEL_NAME,
             "messages": [{
                 "role": "user",
                 "content": (
                     "Two text fragments from a legal contract. Fragment A is the end of "
                     "one clause. Fragment B is a candidate for being the tail end of that "
-                    "SAME clause — cut apart only by page-layout noise (a running header/"
-                    "footer) between them — rather than the start of a genuinely new, "
+                    "SAME clause â€” cut apart only by page-layout noise (a running header/"
+                    "footer) between them â€” rather than the start of a genuinely new, "
                     "unrelated clause.\n\n"
                     f"Fragment A (end):\n{tail}\n\nFragment B (start):\n{head}\n\n"
                     'Respond with ONLY {"continuation": true} or {"continuation": false}.'
@@ -504,11 +504,11 @@ def _is_continuation(prev_text: str, fragment_text: str) -> bool:
             "max_tokens": 20,
             "temperature": 0.0,
         }
-        base = settings.GEMMA4_BASE_URL.rstrip("/")
+        base = settings.GROQ_BASE_URL.rstrip("/")
         headers = {"Content-Type": "application/json"}
-        if getattr(settings, "GEMMA4_API_KEY", None):
-            headers["Authorization"] = f"Bearer {settings.GEMMA4_API_KEY}"
-        timeout = getattr(settings, "GEMMA4_TIMEOUT_SECONDS", 30)
+        if getattr(settings, "GROQ_API_KEY", None):
+            headers["Authorization"] = f"Bearer {settings.GROQ_API_KEY}"
+        timeout = getattr(settings, "GROQ_TIMEOUT_SECONDS", 30)
         with httpx.Client(timeout=timeout) as client:
             resp = client.post(f"{base}/chat/completions", json=payload, headers=headers)
             resp.raise_for_status()
@@ -516,16 +516,16 @@ def _is_continuation(prev_text: str, fragment_text: str) -> bool:
         m = re.search(r'"continuation"\s*:\s*(true|false)', content, re.IGNORECASE)
         if m:
             return m.group(1).lower() == "true"
-        # Ambiguous/unparseable reply — same fail-open default as an outright error.
+        # Ambiguous/unparseable reply â€” same fail-open default as an outright error.
         return True
     except Exception as exc:
-        logger.debug("[gemma_extractor] continuation check failed, defaulting to merge: %s", exc)
+        logger.debug("[groq_extractor] continuation check failed, defaulting to merge: %s", exc)
         return True
 
 
-# ── Model conversion ───────────────────────────────────────────────────────────
+# â”€â”€ Model conversion â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-def _to_legal_clause(idx: int, gc: _GemmaClause, pages: list[int]) -> LegalClause:
+def _to_legal_clause(idx: int, gc: _GroqClause, pages: list[int]) -> LegalClause:
     clause = LegalClause(
         clause_index=idx,
         clause_text=gc.clause_text,
@@ -546,7 +546,7 @@ def _to_legal_clause(idx: int, gc: _GemmaClause, pages: list[int]) -> LegalClaus
     return clause
 
 
-# ── Regex fallback ─────────────────────────────────────────────────────────────
+# â”€â”€ Regex fallback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _regex_fallback(
     parsed_doc: ParsedDocument,
@@ -557,8 +557,8 @@ def _regex_fallback(
         from app.services.chunker import extract_legal_clauses
         clauses = extract_legal_clauses(parsed_doc)
         meta.extracted_count = len(clauses)
-        logger.info("[gemma_extractor] Regex fallback: %d clauses (reason: %s)", len(clauses), reason)
+        logger.info("[groq_extractor] Regex fallback: %d clauses (reason: %s)", len(clauses), reason)
     except Exception as exc:
-        logger.warning("[gemma_extractor] Regex fallback also failed: %s", exc)
+        logger.warning("[groq_extractor] Regex fallback also failed: %s", exc)
         clauses = []
     return clauses, meta
