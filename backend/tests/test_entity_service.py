@@ -1,4 +1,4 @@
-from unittest.mock import patch
+﻿from unittest.mock import patch
 
 import app.services.entity_service as es
 
@@ -53,26 +53,26 @@ def test_extract_entities_falls_back_when_no_endpoint():
     assert "Acme Corporation" in names
 
 
-def test_parse_Groq_entities_reads_json():
+def test_parse_groq_entities_reads_json():
     raw = '```json\n{"entities": [{"name": "Acme Corp", "type": "org"}, {"name": "London", "type": "location"}]}\n```'
-    out = es._parse_Groq_entities(raw)
+    out = es._parse_groq_entities(raw)
     assert {"name": "Acme Corp", "type": "org"} in out
     assert any(e["type"] == "location" for e in out)
 
 
-def test_parse_Groq_entities_dedupes_and_skips_blank():
+def test_parse_groq_entities_dedupes_and_skips_blank():
     raw = '{"entities": [{"name": "Acme", "type": "org"}, {"name": "acme", "type": "org"}, {"name": "", "type": "x"}]}'
-    out = es._parse_Groq_entities(raw)
+    out = es._parse_groq_entities(raw)
     assert len(out) == 1
 
 
-def test_parse_Groq_entities_bad_json_returns_none():
-    assert es._parse_Groq_entities("not json at all") is None
+def test_parse_groq_entities_bad_json_returns_none():
+    assert es._parse_groq_entities("not json at all") is None
 
 
-def test_parse_Groq_entities_empty_list_is_valid_not_none():
+def test_parse_groq_entities_empty_list_is_valid_not_none():
     # Groq correctly finding zero entities is a valid answer, not a failure.
-    out = es._parse_Groq_entities('{"entities": []}')
+    out = es._parse_groq_entities('{"entities": []}')
     assert out == []
     assert out is not None
 
@@ -84,14 +84,14 @@ def test_extract_entities_accepts_legitimate_empty_Groq_result():
     # invented pseudo-entities from capitalized phrases (e.g. "FY 2023-24") in
     # text that has no real named entities. It must now trust an explicit [].
     with patch.object(es.settings, "GROQ_BASE_URL", "http://x"), \
-         patch.object(es, "_call_Groq_ner", return_value=[]):
+         patch.object(es, "_call_groq_ner", return_value=[]):
         ents = es.extract_entities("Q1 Planned Revenue was 950.00 for FY 2023-24.")
     assert ents == []
 
 
 def test_extract_entities_falls_back_only_on_genuine_parse_failure():
     with patch.object(es.settings, "GROQ_BASE_URL", "http://x"), \
-         patch.object(es, "_call_Groq_ner", return_value=None):
+         patch.object(es, "_call_groq_ner", return_value=None):
         ents = es.extract_entities("Acme Corporation and Globex Industries.")
     names = {e["name"] for e in ents}
     assert "Acme Corporation" in names

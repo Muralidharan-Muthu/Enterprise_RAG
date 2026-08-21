@@ -1,4 +1,4 @@
-"""Tests for package B: LLM client hygiene / concurrency safety.
+﻿"""Tests for package B: LLM client hygiene / concurrency safety.
 
 1. groq_client.chat() (sync path) must be gated by a shared threading.Semaphore
    sized to settings.GROQ_MAX_CONCURRENT, so concurrent callers (e.g. clause
@@ -20,7 +20,7 @@ import app.services.groq_client as groq_client
 import app.services.router_service as router_service
 
 
-# ── Sync semaphore cap ──────────────────────────────────────────────────────────
+# â”€â”€ Sync semaphore cap â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _ConcurrencyTracker:
     """Records the max number of simultaneously in-flight calls."""
@@ -147,7 +147,7 @@ def test_semaphore_is_shared_singleton(monkeypatch):
 
 def test_chat_releases_semaphore_on_read_timeout(monkeypatch):
     """Even when chat() raises (ReadTimeout not retried), the semaphore slot
-    must be released — otherwise the cap permanently shrinks."""
+    must be released â€” otherwise the cap permanently shrinks."""
     monkeypatch.setattr(groq_client.settings, "GROQ_MAX_CONCURRENT", 1)
     monkeypatch.setattr(groq_client.settings, "GROQ_BASE_URL", "http://mock-Groq")
     monkeypatch.setattr(groq_client.settings, "GROQ_MAX_RETRIES", 0)
@@ -161,14 +161,14 @@ def test_chat_releases_semaphore_on_read_timeout(monkeypatch):
     with pytest.raises(httpx.ReadTimeout):
         groq_client.chat([{"role": "user", "content": "hi"}], 50)
 
-    # Semaphore must have been released — a second call should not hang.
+    # Semaphore must have been released â€” a second call should not hang.
     sem = groq_client._get_sync_semaphore()
     acquired = sem.acquire(timeout=1)
     assert acquired is True
     sem.release()
 
 
-# ── Router client reuse ──────────────────────────────────────────────────────────
+# â”€â”€ Router client reuse â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @pytest.fixture(autouse=True)
 def _reset_router_client(monkeypatch):
@@ -178,7 +178,7 @@ def _reset_router_client(monkeypatch):
 
 
 def test_router_reuses_same_client_instance(monkeypatch):
-    """Multiple _call_Groq invocations must reuse the same httpx.Client
+    """Multiple _call_groq invocations must reuse the same httpx.Client
     instance rather than constructing a new one per call."""
     monkeypatch.setattr(router_service.settings, "GROQ_BASE_URL", "http://mock-Groq")
     monkeypatch.setattr(router_service.settings, "GROQ_API_KEY", "")
@@ -202,10 +202,10 @@ def test_router_reuses_same_client_instance(monkeypatch):
 
     with patch("app.services.router_service.httpx.Client", side_effect=counting_client):
         client1 = router_service._get_client()
-        router_service._call_Groq("prompt 1")
+        router_service._call_groq("prompt 1")
         client2 = router_service._get_client()
-        router_service._call_Groq("prompt 2")
-        router_service._call_Groq("prompt 3")
+        router_service._call_groq("prompt 2")
+        router_service._call_groq("prompt 3")
 
     assert construction_count["n"] == 1
     assert client1 is client2
