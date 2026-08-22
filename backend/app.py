@@ -1,4 +1,8 @@
 import os
+
+# Disable Gradio 5 SSR so it does not intercept custom FastAPI JSON endpoints
+os.environ["GRADIO_SSR_MODE"] = "false"
+
 import threading
 from pathlib import Path
 import gradio as gr
@@ -93,4 +97,4 @@ demo.app.router.lifespan_context = lifespan
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 7860))
-    demo.launch(server_name="0.0.0.0", server_port=port)
+    demo.launch(server_name="0.0.0.0", server_port=port, ssr_mode=False)
