@@ -4,26 +4,6 @@ from pathlib import Path
 import gradio as gr
 from app.main import app as fastapi_app
 
-try:
-    import spaces
-    gpu_decorator = spaces.GPU
-except Exception:
-    def gpu_decorator(*args, **kwargs):
-        def wrapper(fn):
-            return fn
-        return wrapper if not args or not callable(args[0]) else args[0]
-
-
-def fast_health_check(msg: str) -> str:
-    """Instant CPU health check returning in <1ms without ZeroGPU queue waiting."""
-    return f"⚡ Enterprise RAG API is Healthy & Ready! (Echo: {msg or 'OK'})"
-
-
-@gpu_decorator(duration=10)
-def zerogpu_probe(msg: str) -> str:
-    """Registered @spaces.GPU function for Hugging Face ZeroGPU supervisor."""
-    return f"ZeroGPU Hardware Allocated Successfully: {msg or 'OK'}"
-
 
 def ensure_docling_models():
     """Ensure docling_models folder is downloaded and available on Hugging Face Spaces."""
@@ -48,6 +28,11 @@ def ensure_docling_models():
 threading.Thread(target=ensure_docling_models, daemon=True).start()
 
 
+def check_api_health(msg: str) -> str:
+    """Instant CPU health check returning in <1ms without any queue delays."""
+    return f"⚡ Enterprise RAG API is Healthy, Online & Operational! (Message: '{msg or 'ping'}')"
+
+
 with gr.Blocks(title="Enterprise RAG Backend API") as demo:
     gr.Markdown("# 🚀 Enterprise RAG Backend API")
     gr.Markdown("""
@@ -56,14 +41,12 @@ with gr.Blocks(title="Enterprise RAG Backend API") as demo:
     - **Health Check Endpoint**: [`/api/v1/health`](./api/v1/health)
     - **Query API Endpoint**: `/api/v1/query`
     """)
-    inp = gr.Textbox(value="ping", label="Test Connection")
-    out = gr.Textbox(label="Result")
-    with gr.Row():
-        btn_fast = gr.Button("⚡ Instant API Health Check", variant="primary")
-        btn_gpu = gr.Button("🚀 Test ZeroGPU Allocation", variant="secondary")
+    with gr.Group():
+        inp = gr.Textbox(value="ping", label="Test Connection", placeholder="Enter text to ping the backend...")
+        out = gr.Textbox(label="Backend Response", interactive=False)
+        btn = gr.Button("⚡ Instant API Health Check", variant="primary")
     
-    btn_fast.click(fn=fast_health_check, inputs=inp, outputs=out)
-    btn_gpu.click(fn=zerogpu_probe, inputs=inp, outputs=out)
+    btn.click(fn=check_api_health, inputs=inp, outputs=out, queue=False)
 
 # Mount all FastAPI routes and lifespan onto Gradio's internal FastAPI application
 demo.app.include_router(fastapi_app.router)
