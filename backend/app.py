@@ -2,7 +2,14 @@ import os
 import threading
 from pathlib import Path
 import gradio as gr
+import spaces
 from app.main import app as fastapi_app
+
+
+@spaces.GPU
+def zerogpu_handler(msg: str) -> str:
+    """Registered @spaces.GPU function for Hugging Face ZeroGPU supervisor."""
+    return f"ZeroGPU Hardware Allocated: {msg or 'OK'}"
 
 
 def ensure_docling_models():
@@ -44,9 +51,12 @@ with gr.Blocks(title="Enterprise RAG Backend API") as demo:
     with gr.Group():
         inp = gr.Textbox(value="ping", label="Test Connection", placeholder="Enter text to ping the backend...")
         out = gr.Textbox(label="Backend Response", interactive=False)
-        btn = gr.Button("⚡ Instant API Health Check", variant="primary")
+        with gr.Row():
+            btn_fast = gr.Button("⚡ Instant API Health Check", variant="primary")
+            btn_gpu = gr.Button("🚀 Test ZeroGPU Allocation", variant="secondary")
     
-    btn.click(fn=check_api_health, inputs=inp, outputs=out, queue=False)
+    btn_fast.click(fn=check_api_health, inputs=inp, outputs=out, queue=False)
+    btn_gpu.click(fn=zerogpu_handler, inputs=inp, outputs=out)
 
 # Mount all FastAPI routes and lifespan onto Gradio's internal FastAPI application
 demo.app.include_router(fastapi_app.router)
