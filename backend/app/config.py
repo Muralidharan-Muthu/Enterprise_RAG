@@ -25,17 +25,20 @@ class Settings(BaseSettings):
     # ── LLM (Groq API - Multi-Model Architecture) ────────────
     GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
     GROQ_API_KEY: str = ""
-    GROQ_MODEL_NAME: str = "openai/gpt-oss-120b"              # Default fallback model
-    GROQ_SYNTHESIS_MODEL: str = "openai/gpt-oss-120b"         # Complex RAG reasoning & multi-document synthesis
+    GROQ_MODEL_NAME: str = "openai/gpt-oss-120b"              # Default flagship model
+    GROQ_SYNTHESIS_MODEL: str = "openai/gpt-oss-120b"         # Complex RAG reasoning & multi-document synthesis (120B)
+    GROQ_EXTRACTION_MODEL: str = "qwen/qwen3.6-27b"           # Knowledge Graph entity/relation extraction & Cypher (27B)
+    GROQ_SPYDER_MODEL: str = "groq/compound"                  # Post-rerank sufficiency judge & corrective self-RAG (70K TPM)
+    GROQ_RAVEN_MODEL: str = "groq/compound-mini"              # Pre-retrieval query reframing & decomposition (70K TPM)
+    GROQ_ENRICHMENT_MODEL: str = "openai/gpt-oss-20b"         # Ingestion chunk & clause metadata enrichment (20B)
     GROQ_ROUTING_MODEL: str = "groq/compound-mini"            # Ultra-fast intent classification & query routing
-    GROQ_EXTRACTION_MODEL: str = "openai/gpt-oss-120b"        # Graph entity/relation extraction & Cypher
-    GROQ_ENRICHMENT_MODEL: str = "openai/gpt-oss-20b"         # Ingestion chunk & clause metadata enrichment
     GROQ_CHAT_MODEL: str = "groq/compound-mini"               # Conversational & small talk chat
     GROQ_TIMEOUT_SECONDS: int = 120          # read timeout (model generation)
     GROQ_CONNECT_TIMEOUT_SECONDS: int = 10   # fail fast when endpoint is down
-    GROQ_MAX_RETRIES: int = 2                # retries on transient 5xx / connect errors
+    GROQ_MAX_RETRIES: int = 6                # retries on 429 rate-limit & transient 5xx errors
+    GROQ_MIN_INTERVAL_SECONDS: float = 2.0   # minimum spacing between Groq requests (~30 RPM limit safe)
     GROQ_MAX_TOKENS: int = 800               # max output tokens per answer
-    GROQ_MAX_CONCURRENT: int = 5
+    GROQ_MAX_CONCURRENT: int = 3
 
     # Use the LLM to classify query intent (which stores to search). Off by
     # default: it adds a full Groq round-trip on the critical path, and the
@@ -347,7 +350,7 @@ class Settings(BaseSettings):
     # Beyond this many chunks, fall back to doc-level extraction (cost ceiling).
     GRAPHRAG_MAX_CHUNKS_PER_DOC: int = 200
     # Worker-side ThreadPoolExecutor concurrency for parallel Groq extraction calls.
-    GRAPHRAG_EXTRACT_CONCURRENCY: int = 4
+    GRAPHRAG_EXTRACT_CONCURRENCY: int = 2
     # Max entities to extract per chunk (or per doc in fallback mode).
     GRAPHRAG_ENTITIES_PER_CHUNK: int = 15
     # Community detection algorithm: "louvain" (python-louvain) or "label_propagation".
@@ -453,6 +456,8 @@ class Settings(BaseSettings):
         self.GROQ_SYNTHESIS_MODEL = (self.GROQ_SYNTHESIS_MODEL or self.GROQ_MODEL_NAME).strip()
         self.GROQ_ROUTING_MODEL = (self.GROQ_ROUTING_MODEL or self.GROQ_MODEL_NAME).strip()
         self.GROQ_EXTRACTION_MODEL = (self.GROQ_EXTRACTION_MODEL or self.GROQ_MODEL_NAME).strip()
+        self.GROQ_SPYDER_MODEL = (self.GROQ_SPYDER_MODEL or self.GROQ_MODEL_NAME).strip()
+        self.GROQ_RAVEN_MODEL = (self.GROQ_RAVEN_MODEL or self.GROQ_MODEL_NAME).strip()
         self.GROQ_ENRICHMENT_MODEL = (self.GROQ_ENRICHMENT_MODEL or self.GROQ_MODEL_NAME).strip()
         self.GROQ_CHAT_MODEL = (self.GROQ_CHAT_MODEL or self.GROQ_MODEL_NAME).strip()
 

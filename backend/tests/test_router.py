@@ -51,32 +51,39 @@ def test_rule_based_policy():
     assert result.document_type == "policy"
 
 
-def test_rule_based_research():
+def test_rule_based_multi_type_financial_legal():
     doc = _make_doc(
-        "research_paper.pdf",
-        "Abstract: This study investigates the methodology behind large language models. "
-        "Our hypothesis is that retrieval augmented generation improves factual accuracy. "
-        "The findings show a 23% improvement. Bibliography and citation list are included."
+        "financial_contract.pdf",
+        "This Agreement governs loan repayments. The Company shall pay quarterly interest based on Revenue and EBITDA. "
+        "The Borrower shall indemnify the Lender in the event of default or breach of this contract under Governing Law."
     )
     result = _rule_based_classify(doc)
-    assert result.document_type == "research"
+    assert result.has_type("financial")
+    assert result.has_type("legal")
+    assert "financial" in result.document_types
+    assert "legal" in result.document_types
 
 
 def test_rule_based_returns_router_result():
     doc = _make_doc("unknown.pdf", "Some generic document text without clear category signals.")
     result = _rule_based_classify(doc)
     assert isinstance(result, RouterResult)
-    assert result.document_type in ("policy", "financial", "legal", "entity", "research")
+    for dt in result.document_types:
+        assert dt in ("policy", "financial", "legal", "entity")
     assert 0.0 <= result.confidence <= 1.0
 
 
 def test_rule_based_financial_with_tables():
     from app.models.document import ExtractedTable
+    from app.services.router_service import _build_full_document_representation
     doc = _make_doc("report.pdf", "Quarterly data overview.")
     doc.tables = [
         ExtractedTable(table_index=i, page_number=1, headers=["A", "B"], rows=[["1", "2"]])
         for i in range(4)
     ]
+    rep = _build_full_document_representation(doc)
+    assert "[Document contains 4 structured tables]" in rep
+    assert "Table 0" in rep
     result = _rule_based_classify(doc)
     # 4 tables → +2 to financial score
     assert result.document_type == "financial"

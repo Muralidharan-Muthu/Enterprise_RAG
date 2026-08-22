@@ -20,15 +20,15 @@ def test_rule_based_visual_query_routes_to_searchable_stores():
     assert "vector" in out["stores"]
 
 
-def test_rule_based_research_query():
-    out = intent._rule_based_intent("summarize the study methodology and hypothesis")
-    assert "research" in out["stores"]
-    assert out["doc_types"] == ["research"]
+def test_rule_based_policy_query():
+    out = intent._rule_based_intent("explain the standard operating procedure and compliance policy")
+    assert "vector" in out["stores"]
+    assert out["doc_types"] == ["policy"]
 
 
 def test_rule_based_ambiguous_searches_all_stores():
     out = intent._rule_based_intent("tell me something")
-    assert set(out["stores"]) == {"vector", "clause", "research", "table"}
+    assert set(out["stores"]) == {"vector", "clause", "table"}
     assert out["doc_types"] is None
     assert out["confidence"] < 0.6
 

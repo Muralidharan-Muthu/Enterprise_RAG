@@ -38,26 +38,19 @@ RULE_HIGH_CONFIDENCE = 0.8
 # image_store is NOT a searchable store (migration 008 — pure repository, no
 # embedding). Image-derived searchable content lives in the destination stores
 # (table/vector/clause/document), so visual queries route there.
-ALL_STORES = ["vector", "clause", "research", "table"]
+ALL_STORES = ["vector", "clause", "table"]
 
 # keyword → content category. Each category maps to its MINIMAL, content-precise
 # store set so a clearly single-content query routes to one store (precision)
 # rather than always spilling into vector.
-# A dedicated table signal is kept separate from broader "financial" wording:
-# "show me the X table" must hit table_store ONLY, while "Q3 revenue" (which may
-# live in narrative text too) stays table+vector.
 _TABLE_KW = ("table", "tabular", "spreadsheet", "row of", "column", "cell value",
              "line item", "line items")
-# Attribute questions about an entity's sector/industry are commonly answered
-# by company-list tables even when the user never says "table".
 _TABLE_ATTRIBUTE_KW = ("sector", "industry", "segment", "classification",
                        "classified as", "belongs to")
 _LEGAL_KW = ("clause", "contract", "agreement", "liability", "indemnif", "termination",
              "obligation", "governing law", "confidential", "warrant", "dispute", "breach")
 _FINANCIAL_KW = ("revenue", "profit", "ebitda", "fiscal", "quarter", "balance sheet",
                  "cash flow", "margin", "financial", "earnings", "income statement")
-_RESEARCH_KW = ("study", "methodology", "hypothesis", "experiment", "citation", "doi",
-                "abstract", "findings", "literature", "dataset", "p-value", "research")
 _VISUAL_KW = ("chart", "graph", "figure", "image", "diagram", "plot", "visual", "picture",
               "screenshot", "infographic")
 _POLICY_KW = ("policy", "procedure", "sop", "guideline", "compliance", "governance",
@@ -66,9 +59,8 @@ _POLICY_KW = ("policy", "procedure", "sop", "guideline", "compliance", "governan
 SYSTEM_PROMPT = (
     "You classify a search query to route it to the right document stores in a "
     "RAG system. Stores: vector (policy/general text), clause (legal/contract), "
-    "research (scientific papers), table (financial/numeric tables, charts and "
-    "figures with data). Respond with ONLY JSON: "
-    '{"stores": ["..."], "doc_types": ["policy|financial|legal|research|entity"] or null, '
+    "table (financial/numeric tables, charts and figures with data). Respond with ONLY JSON: "
+    '{"stores": ["..."], "doc_types": ["policy|financial|legal|entity"] or null, '
     '"confidence": 0..1, "reasoning": "..."}. Return the MINIMAL set of stores that '
     "clearly match the query — if it asks about a table, numbers, a chart or a figure, "
     'return just ["table"]; about a contract clause, just ["clause"]. Use high '
@@ -95,8 +87,6 @@ def _rule_based_intent(query: str) -> dict:
         matched["financial"] = {"table", "vector"}; doc_types.add("financial")
     if hit(_LEGAL_KW):
         matched["legal"] = {"clause"}; doc_types.add("legal")
-    if hit(_RESEARCH_KW):
-        matched["research"] = {"research"}; doc_types.add("research")
     if hit(_VISUAL_KW):
         # Charts/figures with real data were cross-stored to table_store; any
         # descriptive text lives in vector_store. image_store is not searchable.

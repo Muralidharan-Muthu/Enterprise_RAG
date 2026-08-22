@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 # Store types whose `text` is prose worth sentence-splitting. Tables and images
 # are handled verbatim by synthesis and are intentionally excluded.
-_COMPRESSIBLE_STORES = frozenset({"vector", "clause", "research"})
+_COMPRESSIBLE_STORES = frozenset({"vector", "clause"})
 
 # Sentence boundary: end punctuation + whitespace, guarded against splitting on
 # a few common abbreviations and decimal points. Deliberately simple and

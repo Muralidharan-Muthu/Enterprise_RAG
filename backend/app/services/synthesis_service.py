@@ -144,7 +144,6 @@ async def synthesize(query: str, chunks: list) -> dict:
 _STORE_LABELS = {
     "vector": "Document",
     "clause": "Legal Clause",
-    "research": "Research",
     "table": "Table",
     "image": "Figure/Image",
 }

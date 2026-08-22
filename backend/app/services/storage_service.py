@@ -4,7 +4,6 @@ Storage service — routes content to Supabase stores by *content type*.
 Text routes by document nature:
   policy / entity / financial → vector_store
   legal                       → clause_store  (with Groq-enriched metadata)
-  research                    → document_store
 
 Content streams routed independent of document_type:
   tables → table_store   (ANY document with tables — embedded + searchable)
@@ -81,12 +80,10 @@ def store_chunks(
 ) -> dict[str, list[str]]:
     """Route content to stores by *content type*, not by document_type alone.
 
-    Text routes by the document's nature (legal→clause_store, research→
-    document_store, everything else→vector_store). Tables are a universal content
-    stream: ANY document that contains tables stores them in table_store,
-    regardless of its document_type — so a policy/legal/research PDF no longer
-    silently drops its tables. Images are handled even earlier (stage 1b →
-    image_store) and are not touched here.
+    Text routes by the document's nature (legal→clause_store, everything else→
+    vector_store). Tables are a universal content stream: ANY document that contains
+    tables stores them in table_store, regardless of its document_type. Images are
+    handled earlier (stage 1b → image_store) and are not touched here.
 
     table_source_image_ids / table_extraction (migration 014, Slice 2a): optional
     dicts keyed by table_index carrying write-time lineage — the image_store crop
@@ -108,16 +105,15 @@ def store_chunks(
     stored_ids: dict[str, list[str]] = {}
 
     # ── TEXT — routed by document nature ──────────────────────────────
-    if document_type == "legal" and legal_clauses and clause_embeddings is not None:
+    if legal_clauses and clause_embeddings is not None and len(clause_embeddings) > 0:
         ids = _store_clauses(document_id, legal_clauses, clause_embeddings, parsed_doc)
         if ids:
             stored_ids["clause_store"] = ids
-    else:
-        # policy / financial / research / entity / legal-without-extracted-clauses
-        if chunks and len(embeddings) > 0:
-            ids = _store_vector_chunks(document_id, chunks, embeddings)
-            if ids:
-                stored_ids["vector_store"] = ids
+
+    if chunks and len(embeddings) > 0:
+        ids = _store_vector_chunks(document_id, chunks, embeddings)
+        if ids:
+            stored_ids["vector_store"] = ids
 
     # ── TABLES — universal content stream (any document type) ─────────
     if parsed_doc.tables:
@@ -441,14 +437,6 @@ def _store_clauses(
     ids = [str(r[0]) for r in result]
     logger.info("Stored %d clauses for document %s", len(rows), document_id)
     return ids
-
-
-def _store_research_chunks(
-    document_id: str,
-    chunks: list[Chunk],
-    embeddings: np.ndarray,
-) -> list[str]:
-    return _store_vector_chunks(document_id, chunks, embeddings)
 
 
 def _table_image_path(document_id: str, table_index: int) -> str:

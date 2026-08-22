@@ -8,10 +8,10 @@ import { cn } from "@/lib/utils";
 
 const TYPE_FILTERS = [
   { value: "", label: "All Document Types" },
-  { value: "policy", label: "Policy Documents" },
   { value: "financial", label: "Financial Reports" },
   { value: "legal", label: "Legal Agreements" },
-  { value: "research", label: "Research Papers" },
+  { value: "policy", label: "Policy Documents" },
+  { value: "entity", label: "Entity & Org Structures" },
 ];
 
 const STATUS_FILTERS = [

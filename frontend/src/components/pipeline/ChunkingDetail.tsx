@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FileText, Table2, Scale, FlaskConical, Loader2, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { FileText, Table2, Scale, Loader2, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDocumentChunks } from "@/hooks/useDocuments";
 import type { PipelineDocumentDetail, ChunkStore } from "@/lib/types";
@@ -444,66 +444,6 @@ function ClauseList({ items }: { items: Record<string, unknown>[] }) {
   );
 }
 
-function ResearchList({ items }: { items: Record<string, unknown>[] }) {
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
-  const toggle = (i: number) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      next.has(i) ? next.delete(i) : next.add(i);
-      return next;
-    });
-
-  if (items.length === 0) return <Empty />;
-
-  return (
-    <div className="space-y-2">
-      {items.map((item, i) => {
-        const idx = Number(item["chunk_index"] ?? i);
-        const text = String(item["chunk_text"] ?? "");
-        const page = Number(item["page_number"] ?? 0);
-        const section = item["section_title"] ? String(item["section_title"]) : null;
-        const ctype = item["chunk_type"] ? String(item["chunk_type"]) : null;
-        const srcTitle = item["source_title"] ? String(item["source_title"]) : null;
-        const doi = item["source_doi"] ? String(item["source_doi"]) : null;
-
-        return (
-          <ChunkCard key={i}>
-            <div className="mb-1 flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400">
-                #{idx}
-              </span>
-              <Pill className="border-gray-200 bg-gray-100 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
-                p.{page}
-              </Pill>
-              {section && (
-                <span className="text-[10px] text-gray-500 dark:text-gray-400">{section}</span>
-              )}
-              {ctype && (
-                <Pill className="border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-800 dark:bg-teal-950 dark:text-teal-300">
-                  {ctype}
-                </Pill>
-              )}
-            </div>
-            <ExpandableText
-              text={text}
-              idx={i}
-              expanded={expanded.has(i)}
-              onToggle={toggle}
-            />
-            {(srcTitle || doi) && (
-              <div className="mt-1.5 text-[10px] text-gray-400 dark:text-gray-500">
-                {srcTitle && <span>{srcTitle}</span>}
-                {srcTitle && doi && <span> · </span>}
-                {doi && <span className="font-mono">{doi}</span>}
-              </div>
-            )}
-          </ChunkCard>
-        );
-      })}
-    </div>
-  );
-}
-
 function Empty() {
   return (
     <p className="py-6 text-center text-xs text-gray-400 dark:text-gray-600">
@@ -561,7 +501,7 @@ export function ChunkingDetail({ doc }: Props) {
         </span>
         <span className="text-[10px] text-gray-400 dark:text-gray-500">
           {doc.total_chunks ?? 0} units &bull; {doc.vector_chunks} text, {doc.table_count} tables,{" "}
-          {doc.clause_count} clauses, {doc.research_chunks} research
+          {doc.clause_count} clauses
         </span>
       </div>
 
@@ -601,10 +541,8 @@ export function ChunkingDetail({ doc }: Props) {
             <VectorList items={items} />
           ) : activeStore === "table" ? (
             <TableList items={items} />
-          ) : activeStore === "clause" ? (
-            <ClauseList items={items} />
           ) : (
-            <ResearchList items={items} />
+            <ClauseList items={items} />
           )}
         </div>
 

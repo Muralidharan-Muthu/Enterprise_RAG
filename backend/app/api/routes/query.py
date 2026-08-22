@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import json as _json
 import time
 import logging
@@ -30,7 +30,7 @@ _blended_confidence_for_stream = synthesis_service.blended_confidence_for_stream
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-_VALID_DOC_TYPES = {"policy", "financial", "legal", "entity", "research"}
+_VALID_DOC_TYPES = {"policy", "financial", "legal", "entity"}
 
 
 class TableFilterRequest(BaseModel):

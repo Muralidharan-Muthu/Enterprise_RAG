@@ -358,14 +358,20 @@ def _merge_small_chunks(
 
 # Strict JSON prompt — Groq must return an array aligned to the input chunks.
 _ENRICH_PROMPT_TMPL = (
-    "You are a document metadata extractor. You will be given {n} text chunks "
-    "from a single document, separated by the marker <CHUNK_SEP>. "
-    "For EACH chunk (in order), output a JSON array of exactly {n} objects. "
-    "Each object MUST have exactly three keys:\n"
-    '  "section_title": a concise heading (≤12 words) describing the chunk topic,\n'
+    "You are an expert document chunk classifier and metadata extractor. You will be given {n} text chunks "
+    "from a document, separated by the marker <CHUNK_SEP>.\n"
+    "For EACH chunk (in order), output a JSON array of exactly {n} objects.\n"
+    "Each object MUST have:\n"
+    '  "section_title": concise heading (≤12 words) describing the chunk topic,\n'
     '  "keywords": a JSON array of 3–8 key terms or phrases from the chunk,\n'
-    '  "semantic_type": one of "paragraph", "list", "table_summary", '
-    '"definition", "procedure", "legal_clause", "financial_data".\n'
+    '  "semantic_type": one of "legal_clause", "paragraph", "list", "table_summary", "definition", "procedure", "financial_data".\n'
+    "If the chunk is a legal clause, agreement term, statutory provision, or contractual rule (e.g. Termination, Dispute Resolution, Liability, Indemnity, Jurisdiction, Obligations, Confidentiality), set semantic_type to 'legal_clause' and ALSO include:\n"
+    '  "clause_number": clause number or section code (e.g. "1.", "2.1", "Article IV", or null),\n'
+    '  "clause_title": title of the clause (e.g. "TERMINATION FOR CAUSE", or null),\n'
+    '  "clause_type": one of [obligation, prohibition, right, definition, liability, indemnification, termination, confidentiality, dispute_resolution, force_majeure, warranty, penalty, governing_law, general],\n'
+    '  "risk_level": "high" | "medium" | "low" | null,\n'
+    '  "risk_rationale": brief explanation of risk or legal obligation (or null),\n'
+    '  "parties_mentioned": list of named entities or parties mentioned (or []).\n'
     "Output ONLY valid JSON — no markdown fences, no explanation.\n\n"
     "Chunks:\n{chunks_text}"
 )
@@ -378,7 +384,7 @@ def _build_enrich_prompt(chunk_texts: list[str]) -> str:
 
 
 def _parse_enrich_response(raw: str, n: int) -> list[dict]:
-    """Parse Groq's JSON response.  Returns a list of dicts or raises ValueError."""
+    """Parse Groq's JSON response. Returns a list of dicts or raises ValueError."""
     # Strip markdown code fences if the model wraps in ```json ... ```
     raw = raw.strip()
     raw = re.sub(r'^```(?:json)?\s*', '', raw)
@@ -393,10 +399,24 @@ def _parse_enrich_response(raw: str, n: int) -> list[dict]:
     for item in data:
         if not isinstance(item, dict):
             raise ValueError(f"Array element is not a dict: {item!r}")
+        stype = str(item.get("semantic_type", "paragraph")).strip() or "paragraph"
+        cnum = str(item.get("clause_number")).strip() if item.get("clause_number") else None
+        ctitle = str(item.get("clause_title")).strip() if item.get("clause_title") else None
+        ctype = str(item.get("clause_type", "general")).strip() or "general"
+        risk = str(item.get("risk_level")).strip() if item.get("risk_level") in ("high", "medium", "low") else None
+
         result.append({
             "section_title": str(item.get("section_title", "")).strip() or None,
             "keywords": list(item.get("keywords", [])) if isinstance(item.get("keywords"), list) else [],
-            "semantic_type": str(item.get("semantic_type", "paragraph")).strip() or "paragraph",
+            "semantic_type": stype,
+            "clause_number": cnum,
+            "clause_title": ctitle,
+            "clause_type": ctype,
+            "risk_level": risk,
+            "risk_rationale": str(item.get("risk_rationale")).strip() if item.get("risk_rationale") else None,
+            "parties_mentioned": list(item.get("parties_mentioned", [])) if isinstance(item.get("parties_mentioned"), list) else [],
+            "obligor": str(item.get("obligor")).strip() if item.get("obligor") else None,
+            "obligee": str(item.get("obligee")).strip() if item.get("obligee") else None,
         })
     return result
 
@@ -407,21 +427,36 @@ def _fallback_enrichment(
     block_types_list: list[list[str]],
 ) -> list[dict]:
     """Heuristic enrichment used when Groq is unavailable or returns bad JSON."""
+    from app.services.chunker import detect_clause_nature
     result = []
     for i, text in enumerate(chunk_texts):
         path = section_paths[i] if i < len(section_paths) else []
         btypes = block_types_list[i] if i < len(block_types_list) else []
         section_title = path[-1] if path else None
-        if "list" in btypes:
+
+        is_clause, cnum, ctitle, ctype = detect_clause_nature(text, section_title, btypes)
+
+        if is_clause:
+            stype = "legal_clause"
+        elif "list" in btypes:
             stype = "list"
         elif "image_analysis" in btypes:
             stype = "image_analysis"
         else:
             stype = "paragraph"
+
         result.append({
-            "section_title": section_title,
+            "section_title": ctitle or section_title,
             "keywords": [],
             "semantic_type": stype,
+            "clause_number": cnum,
+            "clause_title": ctitle,
+            "clause_type": ctype,
+            "risk_level": "medium" if is_clause else None,
+            "risk_rationale": None,
+            "parties_mentioned": [],
+            "obligor": None,
+            "obligee": None,
         })
     return result
 
@@ -432,7 +467,7 @@ def enrich_chunks_with_groq(
     block_types_list: list[list[str]],
     groq_chat_fn: Callable,
     batch_size: int,
-    max_tokens: int = 600,
+    max_tokens: int = 1200,
 ) -> list[dict]:
     """Batch-enrich chunks via Groq; falls back gracefully on any failure.
 

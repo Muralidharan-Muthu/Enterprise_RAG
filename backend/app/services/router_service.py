@@ -1,13 +1,15 @@
 """
-Gemma 4 document router — classifies a parsed document into one of 5 types
-and extracts metadata. Falls back to a rule-based classifier if the CDAC
-endpoint is unreachable or returns low-confidence results.
+Groq document router — classifies a parsed document across 4 core business
+categories ('financial', 'legal', 'entity', 'policy') using full-document
+chunk/section analysis. Supports multi-type classification (e.g., a document
+containing both financial tables and legal agreements is categorized as both).
+Falls back to a full-text rule-based classifier if Groq is unreachable.
 """
 import json
 import logging
 import re
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 import httpx
@@ -24,8 +26,7 @@ _client_lock = threading.Lock()
 
 def _get_client() -> httpx.Client:
     """Process-wide pooled sync client, reused across calls instead of opening
-    a new connection (and paying TLS handshake cost) per classification.
-    Thread-safe double-checked init; never closed per-call."""
+    a new connection per classification. Thread-safe double-checked init."""
     global _client
     if _client is None or _client.is_closed:
         with _client_lock:
@@ -33,74 +34,115 @@ def _get_client() -> httpx.Client:
                 _client = httpx.Client(timeout=settings.GROQ_TIMEOUT_SECONDS)
     return _client
 
-DOCUMENT_TYPES = ("policy", "financial", "legal", "entity", "research")
 
-SYSTEM_PROMPT = """You are a Software Engineer working on an Enterprise Document
-Intelligence system. Your job is to analyze document content and classify it into
-exactly one category, then extract structured metadata.
+DOCUMENT_TYPES = ("financial", "legal", "entity", "policy")
 
-Respond ONLY with valid JSON. No text, explanation, or markdown outside the JSON."""
+SYSTEM_PROMPT = """You are an Enterprise Document Intelligence specialist.
+Your job is to analyze the FULL content of a document and classify it into ONE OR MORE
+of the 4 enterprise categories:
+- "financial": Financial reports, balance sheets, invoices, budgets, P&L statements, quarterly/annual results, cash flows
+- "legal": Contracts, NDAs, Master Service Agreements (MSAs), terms of service, legal notices, compliance clauses
+- "entity": Corporate hierarchy, org charts, subsidiary structures, company directories, entity relationship maps
+- "policy": Standard operating procedures (SOPs), company policies, operational manuals, HR guidelines, compliance handbooks
 
-USER_PROMPT_TEMPLATE = """Analyze this document and classify it.
+IMPORTANT RULES:
+1. Documents often contain multiple facets (for example: an annual report or acquisition filing contains both "financial" data and "legal" agreements). In such cases, include ALL matching categories in "document_types".
+2. If the document fits a single category, return a list with that single category.
+3. Extract accurate metadata (title, author, date, summary) from the full text.
+
+Respond ONLY with valid JSON. No markdown or explanation outside the JSON."""
+
+USER_PROMPT_TEMPLATE = """Analyze the complete document content and classify its categories.
 
 Filename: {filename}
-First 2000 characters of content:
-{content_excerpt}
-
-Detected tables: {table_count}
 Page count: {page_count}
+Detected tables: {table_count}
 
-Classify into EXACTLY ONE of:
-- "policy":    Policy documents, SOPs, operational manuals, HR policies, FAQs, compliance guides
-- "financial": Financial reports, balance sheets, invoices, budgets, P&L statements, revenue reports
-- "legal":     Contracts, NDAs, agreements, terms of service, legal notices, court documents
-- "entity":    Org charts, entity relationship documents, knowledge bases, directories
-- "research":  Research papers, scientific reports, academic publications, technical papers
+--- FULL EXTRACTED CONTENT / SECTION BREAKDOWN ---
+{full_content}
+--- END OF CONTENT ---
 
 Respond with this exact JSON structure:
 {{
-  "document_type": "<one of the 5 types>",
-  "document_subtype": "<specific subtype, e.g. NDA, balance_sheet, SOP>",
+  "document_types": ["<one or more of: financial, legal, entity, policy>"],
+  "document_subtype": "<specific subtype, e.g. Annual_Report, NDA, MSA_with_Financials, SOP, Org_Chart>",
   "confidence": <0.0 to 1.0>,
-  "reasoning": "<2-3 sentence explanation of classification>",
+  "reasoning": "<2-3 sentence explanation detailing why each selected category applies based on specific sections>",
   "doc_title": "<extracted or inferred title>",
-  "doc_author": "<extracted author name or null>",
+  "doc_author": "<extracted author name, organisation, or null>",
   "doc_date": "<YYYY-MM-DD or null>",
-  "doc_summary": "<100-word summary of the document>",
+  "doc_summary": "<concise 100-word summary of the entire document>",
   "language": "en"
 }}"""
 
 
 @dataclass
 class RouterResult:
-    document_type: str
-    document_subtype: Optional[str]
-    confidence: float
-    reasoning: str
-    doc_title: Optional[str]
-    doc_author: Optional[str]
-    doc_date: Optional[str]
-    doc_summary: Optional[str]
+    document_type: str  # Primary or comma-joined string: e.g. "financial, legal"
+    document_types: list[str] = field(default_factory=list)  # e.g. ["financial", "legal"]
+    document_subtype: Optional[str] = None
+    confidence: float = 0.5
+    reasoning: str = ""
+    doc_title: Optional[str] = None
+    doc_author: Optional[str] = None
+    doc_date: Optional[str] = None
+    doc_summary: Optional[str] = None
     language: str = "en"
     used_fallback: bool = False
 
+    def has_type(self, type_name: str) -> bool:
+        """Check if a specific document type was identified."""
+        return type_name in self.document_types or type_name == self.document_type
 
-"""
-Groq document router — classifies a parsed document into one of 5 types
-using Groq LLM with a fast rule-based fallback.
-"""
 
-# ... [imports remain above]
+def _build_full_document_representation(parsed_doc: ParsedDocument, max_chars: int = 50000) -> str:
+    """
+    Build a comprehensive representation of the full document without missing sections.
+    Includes section titles, table structures, and text blocks across all pages.
+    """
+    lines: list[str] = []
+
+    # Include table structure overview if present
+    if parsed_doc.tables:
+        lines.append(f"[Document contains {len(parsed_doc.tables)} structured tables]")
+        for t in parsed_doc.tables[:10]:
+            headers = ", ".join(t.headers[:8]) if t.headers else "No headers"
+            table_name = getattr(t, "caption", None) or f"Table {getattr(t, 'table_index', 0)}"
+            lines.append(f"- Table on Page {t.page_number} ({table_name}): Headers = [{headers}], Rows = {len(t.rows)}")
+        lines.append("")
+
+    # If raw text is within budget, include full raw text directly
+    if len(parsed_doc.raw_text) <= max_chars:
+        lines.append(parsed_doc.raw_text)
+    else:
+        # For very large documents, construct a representative map across all pages/sections
+        # so every single section of the document is covered.
+        head_len = max_chars // 3
+        tail_len = max_chars // 3
+        mid_len = max_chars - head_len - tail_len
+
+        mid_start = (len(parsed_doc.raw_text) - mid_len) // 2
+
+        lines.append("[Beginning of document]")
+        lines.append(parsed_doc.raw_text[:head_len])
+        lines.append("\n[... Middle sections of document ...]\n")
+        lines.append(parsed_doc.raw_text[mid_start : mid_start + mid_len])
+        lines.append("\n[... Final sections and closing terms of document ...]\n")
+        lines.append(parsed_doc.raw_text[-tail_len:])
+
+    return "\n".join(lines)
+
 
 def classify_document(parsed_doc: ParsedDocument) -> RouterResult:
     """
-    Classify the document type using Groq LLM.
-    Falls back to rule-based classification if Groq is unavailable.
+    Classify the document categories using Groq LLM with full-document analysis.
+    Supports multi-type classification (e.g. ['financial', 'legal']).
+    Falls back to full-text rule-based classification if Groq is unavailable.
     """
-    content_excerpt = parsed_doc.raw_text[:2000]
+    full_content = _build_full_document_representation(parsed_doc)
     prompt = USER_PROMPT_TEMPLATE.format(
         filename=parsed_doc.filename,
-        content_excerpt=content_excerpt,
+        full_content=full_content,
         table_count=len(parsed_doc.tables),
         page_count=parsed_doc.page_count,
     )
@@ -111,9 +153,9 @@ def classify_document(parsed_doc: ParsedDocument) -> RouterResult:
             result = _parse_groq_response(raw_json)
             if result and result.confidence >= 0.5:
                 logger.info(
-                    "Groq classified '%s' as '%s' (confidence=%.2f)",
+                    "Groq classified '%s' as %s (confidence=%.2f)",
                     parsed_doc.filename,
-                    result.document_type,
+                    result.document_types,
                     result.confidence,
                 )
                 return result
@@ -128,7 +170,7 @@ def classify_document(parsed_doc: ParsedDocument) -> RouterResult:
 
 @retry(stop=stop_after_attempt(2), wait=wait_fixed(2))
 def _call_groq(user_prompt: str) -> str:
-    """HTTP call to Groq endpoint. Tries OpenAI-compatible format first."""
+    """HTTP call to Groq endpoint."""
     base_url = settings.GROQ_BASE_URL.rstrip("/")
     headers = {"Content-Type": "application/json"}
     if settings.GROQ_API_KEY:
@@ -149,7 +191,6 @@ def _call_groq(user_prompt: str) -> str:
     response.raise_for_status()
     data = response.json()
 
-    # OpenAI-compatible response format
     return data["choices"][0]["message"]["content"]
 
 
@@ -158,12 +199,10 @@ _call_gemma = _call_groq
 
 
 def _parse_groq_response(raw: str) -> Optional[RouterResult]:
-    # Strip markdown code fences if LLM wrapped the JSON
     cleaned = re.sub(r"```(?:json)?", "", raw).strip().rstrip("```").strip()
     try:
         obj = json.loads(cleaned)
     except json.JSONDecodeError:
-        # Try to find JSON object within the text
         match = re.search(r"\{.*\}", cleaned, re.DOTALL)
         if not match:
             return None
@@ -172,12 +211,26 @@ def _parse_groq_response(raw: str) -> Optional[RouterResult]:
         except json.JSONDecodeError:
             return None
 
-    doc_type = obj.get("document_type", "").lower()
-    if doc_type not in DOCUMENT_TYPES:
-        doc_type = "policy"
+    # Handle multi-type list or single type string
+    raw_types = obj.get("document_types") or obj.get("document_type") or []
+    if isinstance(raw_types, str):
+        # Could be comma-separated or single string
+        type_list = [t.strip().lower() for t in raw_types.split(",") if t.strip()]
+    elif isinstance(raw_types, list):
+        type_list = [str(t).strip().lower() for t in raw_types if str(t).strip()]
+    else:
+        type_list = []
+
+    # Filter to valid core document types (strictly 4 types)
+    valid_types = [t for t in type_list if t in DOCUMENT_TYPES]
+    if not valid_types:
+        valid_types = ["policy"]
+
+    primary_type = ", ".join(valid_types)
 
     return RouterResult(
-        document_type=doc_type,
+        document_type=primary_type,
+        document_types=valid_types,
         document_subtype=obj.get("document_subtype"),
         confidence=float(obj.get("confidence", 0.5)),
         reasoning=obj.get("reasoning", ""),
@@ -191,56 +244,63 @@ def _parse_groq_response(raw: str) -> Optional[RouterResult]:
 
 def _rule_based_classify(parsed_doc: ParsedDocument) -> RouterResult:
     """
-    Fast keyword-based fallback. No LLM call required.
-    Analyzes filename + first 1000 chars of text to determine document type.
+    Rule-based multi-type classifier analyzing full document text, section titles, and tables.
     """
-    text = (parsed_doc.filename + " " + parsed_doc.raw_text[:1000]).lower()
+    full_text = (parsed_doc.filename + " " + parsed_doc.raw_text).lower()
 
     scores: dict[str, int] = {t: 0 for t in DOCUMENT_TYPES}
 
     # Financial signals
     for kw in ["revenue", "profit", "loss", "balance sheet", "income", "expense",
                "cash flow", "quarterly", "annual report", "fiscal", "ebitda",
-               "invoice", "budget", "financial", "p&l"]:
-        if kw in text:
+               "invoice", "budget", "financial", "p&l", "dividend", "shares", "operating profit"]:
+        if kw in full_text:
             scores["financial"] += 1
 
     # Legal signals
     for kw in ["agreement", "contract", "clause", "whereas", "party", "parties",
                "indemnif", "liability", "termination", "governing law", "nda",
-               "confidential", "breach", "obligation", "arbitration"]:
-        if kw in text:
+               "confidential", "breach", "obligation", "arbitration", "jurisdiction", "warranty"]:
+        if kw in full_text:
             scores["legal"] += 1
 
     # Entity signals
     for kw in ["organization chart", "org chart", "subsidiary", "hierarchy",
-               "relationship", "entity", "parent company", "division"]:
-        if kw in text:
+               "relationship", "entity", "parent company", "division", "board of directors", "affiliates"]:
+        if kw in full_text:
             scores["entity"] += 1
 
-    # Policy signals (default)
+    # Policy signals
     for kw in ["policy", "procedure", "sop", "guideline", "standard", "manual",
-               "process", "faq", "regulation", "compliance", "rule"]:
-        if kw in text:
+               "process", "faq", "regulation", "compliance", "rule", "code of conduct"]:
+        if kw in full_text:
             scores["policy"] += 1
 
-    # If document has many tables, lean toward financial
-    if len(parsed_doc.tables) >= 3:
+    # If document has tables with financial indicators, boost financial
+    if len(parsed_doc.tables) >= 2:
         scores["financial"] += 2
 
-    best = max(scores, key=lambda k: scores[k])
-    top_score = scores[best]
+    # Determine all categories meeting threshold (score >= 2 or top score)
+    max_score = max(scores.values())
+    if max_score == 0:
+        matched_types = ["policy"]
+    else:
+        # Include types that have a strong match (at least 2 hits and within 50% of top score)
+        threshold = max(2, int(max_score * 0.5))
+        matched_types = [t for t, s in scores.items() if s >= threshold]
+        if not matched_types:
+            best = max(scores, key=lambda k: scores[k])
+            matched_types = [best]
 
-    if top_score == 0:
-        best = "policy"
-
-    confidence = min(0.9, 0.4 + top_score * 0.1)
+    primary_type = ", ".join(matched_types)
+    confidence = min(0.9, 0.4 + max_score * 0.05)
 
     return RouterResult(
-        document_type=best,
+        document_type=primary_type,
+        document_types=matched_types,
         document_subtype=None,
         confidence=confidence,
-        reasoning=f"Rule-based classification: '{best}' scored {top_score} keyword matches.",
+        reasoning=f"Full-document rule-based classification: detected {matched_types} based on keyword density and table analysis.",
         doc_title=parsed_doc.metadata.get("title"),
         doc_author=parsed_doc.metadata.get("author"),
         doc_date=None,

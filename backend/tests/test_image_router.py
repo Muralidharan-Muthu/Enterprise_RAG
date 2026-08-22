@@ -95,9 +95,9 @@ def test_route_legal_to_clause():
     assert route_for_class(CLASS_LEGAL, "clause_store", 0.9) == "clause_store"
 
 
-def test_route_document_text_research_vs_general():
-    assert route_for_class(CLASS_DOCUMENT_TEXT, "document_store", 0.9) == "document_store"
+def test_route_document_text_to_vector():
     assert route_for_class(CLASS_DOCUMENT_TEXT, "vector_store", 0.9) == "vector_store"
+    assert route_for_class(CLASS_DOCUMENT_TEXT, "document_store", 0.9) == "vector_store"
 
 
 def test_route_decorative_to_image():

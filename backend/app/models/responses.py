@@ -31,6 +31,7 @@ class DocumentSummary(BaseModel):
     id: str
     original_filename: str
     document_type: Optional[str] = None
+    document_types: list[str] = []
     document_subtype: Optional[str] = None
     status: str
     page_count: Optional[int] = None
@@ -41,7 +42,6 @@ class DocumentSummary(BaseModel):
     vector_chunks: int = 0
     table_count: int = 0
     clause_count: int = 0
-    research_chunks: int = 0
     completed_at: Optional[datetime] = None
     created_at: datetime
     error_message: Optional[str] = None
@@ -130,7 +130,6 @@ class PipelineDocumentDetail(BaseModel):
     vector_chunks: int = 0
     table_count: int = 0
     clause_count: int = 0
-    research_chunks: int = 0
     queued_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None

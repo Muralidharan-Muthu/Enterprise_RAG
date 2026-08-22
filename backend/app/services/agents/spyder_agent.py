@@ -127,6 +127,7 @@ async def judge(query: str, reranked_chunks: list) -> dict:
             ],
             max_tokens=300,
             temperature=0.0,
+            model=settings.GROQ_SPYDER_MODEL,
         )
         parsed = _parse_spyder(raw)
         if parsed:

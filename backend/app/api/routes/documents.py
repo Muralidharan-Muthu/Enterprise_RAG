@@ -26,8 +26,8 @@ def list_documents(
         conditions.append("status = %s")
         params.append(doc_status)
     if document_type:
-        conditions.append("document_type = %s")
-        params.append(document_type)
+        conditions.append("document_type ILIKE %s")
+        params.append(f"%{document_type}%")
 
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
@@ -44,7 +44,7 @@ def list_documents(
                 SELECT id, original_filename, document_type, document_subtype,
                        status, page_count, word_count, router_confidence,
                        doc_title, doc_summary, vector_chunks, table_count,
-                       clause_count, research_chunks, completed_at, created_at, error_message
+                       clause_count, completed_at, created_at, error_message
                 FROM multi_store_rag_working.document_overview
                 {where}
                 ORDER BY created_at DESC
@@ -54,28 +54,31 @@ def list_documents(
             )
             rows = cur.fetchall()
 
-    items = [
-        DocumentSummary(
-            id=str(r[0]),
-            original_filename=r[1],
-            document_type=r[2],
-            document_subtype=r[3],
-            status=r[4],
-            page_count=r[5],
-            word_count=r[6],
-            router_confidence=r[7],
-            doc_title=r[8],
-            doc_summary=r[9],
-            vector_chunks=r[10] or 0,
-            table_count=r[11] or 0,
-            clause_count=r[12] or 0,
-            research_chunks=r[13] or 0,
-            completed_at=r[14],
-            created_at=r[15],
-            error_message=r[16],
+    items = []
+    for r in rows:
+        raw_type = r[2] or ""
+        type_list = [t.strip() for t in raw_type.split(",") if t.strip()]
+        items.append(
+            DocumentSummary(
+                id=str(r[0]),
+                original_filename=r[1],
+                document_type=r[2],
+                document_types=type_list,
+                document_subtype=r[3],
+                status=r[4],
+                page_count=r[5],
+                word_count=r[6],
+                router_confidence=r[7],
+                doc_title=r[8],
+                doc_summary=r[9],
+                vector_chunks=r[10] or 0,
+                table_count=r[11] or 0,
+                clause_count=r[12] or 0,
+                completed_at=r[13],
+                created_at=r[14],
+                error_message=r[15],
+            )
         )
-        for r in rows
-    ]
 
     return DocumentListResponse(
         items=items,
@@ -99,7 +102,7 @@ def get_document(document_id: str):
                        d.language_detected, d.doc_metadata, d.storage_path,
                        d.completed_at, d.created_at, d.error_message,
                        COALESCE(vs.n, 0), COALESCE(ts.n, 0),
-                       COALESCE(cs.n, 0), 0
+                       COALESCE(cs.n, 0)
                 FROM multi_store_rag_working.document_registry d
                 LEFT JOIN (SELECT document_id, COUNT(*) n FROM multi_store_rag_working.vector_store  GROUP BY document_id) vs ON vs.document_id = d.id
                 LEFT JOIN (SELECT document_id, COUNT(*) n FROM multi_store_rag_working.table_store    GROUP BY document_id) ts ON ts.document_id = d.id
@@ -113,10 +116,14 @@ def get_document(document_id: str):
     if not row:
         raise DocumentNotFoundError(document_id)
 
+    raw_type = row[2] or ""
+    type_list = [t.strip() for t in raw_type.split(",") if t.strip()]
+
     return DocumentDetail(
         id=str(row[0]),
         original_filename=row[1],
         document_type=row[2],
+        document_types=type_list,
         document_subtype=row[3],
         status=row[4],
         page_count=row[5],
@@ -138,7 +145,6 @@ def get_document(document_id: str):
         vector_chunks=row[21] or 0,
         table_count=row[22] or 0,
         clause_count=row[23] or 0,
-        research_chunks=row[24] or 0,
     )
 
 
@@ -321,6 +327,9 @@ def delete_document(document_id: str):
     if row[1]:
         _try_delete_from_storage(row[2] or "rag-documents", row[1])
 
+    # Delete any staged parsing payload from bucket
+    _try_delete_from_storage(row[2] or "rag-documents", f"staging/{document_id}/parsed.json")
+
     # Delete image and table-crop assets from bucket (grouped by bucket)
     if image_rows:
         by_bucket: dict[str, list[str]] = {}
@@ -348,7 +357,15 @@ def delete_document(document_id: str):
     except Exception as exc:
         logger.warning("Failed to signal community recompute for %s: %s", document_id, exc)
 
-    # Delete DB row — FK ON DELETE CASCADE cleans all child tables
+    # Invalidate retrieval and query caches
+    try:
+        from app.services import retrieval_cache
+        retrieval_cache.clear_all()
+    except Exception as exc:
+        logger.debug("Could not clear retrieval cache: %s", exc)
+
+    # Delete DB row — FK ON DELETE CASCADE cleans all child tables:
+    # (vector_store, table_store, table_row_store, clause_store, image_store, parse_staging, ingestion_jobs)
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(

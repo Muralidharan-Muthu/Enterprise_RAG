@@ -390,10 +390,8 @@ def extract_stores_for_document(
 
 def _detect_text_store(doc_type: str) -> str:
     """Mirror graph_build_service._store_for_doc_type()."""
-    if doc_type == "legal":
+    if "legal" in (doc_type or ""):
         return "clause_store"
-    if doc_type == "research":
-        return "document_store"
     return "vector_store"
 
 

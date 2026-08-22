@@ -100,7 +100,7 @@ def get_run(run_id: str) -> dict | None:
                     "started_at": r[18], "completed_at": r[19],
                     "duration_seconds": r[20],
                     "vector_chunks": int(r[21]), "table_count": int(r[22]),
-                    "clause_count": int(r[23]), "research_chunks": 0,
+                    "clause_count": int(r[23]),
                     "stage_detail": r[25] or {},
                 })
 

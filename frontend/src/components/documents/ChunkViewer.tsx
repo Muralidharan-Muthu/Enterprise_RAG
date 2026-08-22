@@ -130,11 +130,10 @@ type StoreTab = "vector" | "table" | "clause";
 
 interface Props {
   documentId: string;
-  documentType: DocumentType | null;
+  documentType: DocumentType | string | null;
   vectorChunks: number;
   tableCount: number;
   clauseCount: number;
-  researchChunks?: number;
 }
 
 /** Pretty-print structured_content: JSON gets indented, plain text passes through. */

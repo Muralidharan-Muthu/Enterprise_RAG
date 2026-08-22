@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # ==============================================================================
 # Multi-Store RAG Chatbot - Delete All Records from Supabase
 # Safely truncates all documents, chunks, tables, clauses, images, and chat history.
@@ -51,9 +51,12 @@ else
     PYTHON_CMD="python"
 fi
 
-echo -e "\n${CYAN}Running database cleanup script...${NC}"
+echo -e "\n${CYAN}Running Supabase database cleanup script...${NC}"
 "$PYTHON_CMD" "$SCRIPT_DIR/backend/scripts/truncate_supabase.py"
 
+echo -e "\n${CYAN}Running Neo4j Graph database cleanup script...${NC}"
+"$PYTHON_CMD" "$SCRIPT_DIR/backend/scripts/clear_neo4j.py" --all --yes
+
 echo -e "\n${GREEN}============================================================"
-echo "   ✓ All Supabase table records have been deleted."
+echo "   ✓ All Supabase tables and Neo4j Graph data have been purged."
 echo "============================================================${NC}"

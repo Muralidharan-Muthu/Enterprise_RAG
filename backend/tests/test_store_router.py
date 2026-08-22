@@ -594,9 +594,9 @@ class TestDocumentStoreHandler:
         assert parsed["entities"] == []
 
     def test_parse_empty_fallback_uses_ocr(self):
-        ctx = _ctx(detected_store="document_store", ocr_text="research finding here")
+        ctx = _ctx(detected_store="vector_store", ocr_text="document finding here")
         parsed = self.handler.parse("", ctx)
-        assert parsed["chunk_text"] == "research finding here"
+        assert parsed["chunk_text"] == "document finding here"
 
     def test_parse_json_missing_chunk_text_prefers_structured_over_ocr(self):
         """When the VLM's JSON omits chunk_text, fall back to the raw

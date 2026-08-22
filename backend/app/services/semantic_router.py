@@ -28,7 +28,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-ALL_STORES = ["vector", "clause", "research", "table"]
+ALL_STORES = ["vector", "clause", "table"]
 
 # A handful of short, representative example queries per store. Multiple
 # phrasings per store average out into a single centroid so the match isn't
@@ -49,13 +49,6 @@ _STORE_PROTOTYPES: dict[str, list[str]] = {
         "explain the confidentiality obligations",
         "what happens if either party breaches the contract",
         "what is the governing law of this agreement",
-    ],
-    "research": [
-        "summarize the study methodology",
-        "what was the hypothesis of this experiment",
-        "what did the paper find",
-        "what dataset was used in this research",
-        "what is the citation for this finding",
     ],
     "vector": [
         "what is the company policy on this topic",

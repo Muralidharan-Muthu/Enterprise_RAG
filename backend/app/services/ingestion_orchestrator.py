@@ -265,25 +265,35 @@ def ingest_document(self, document_id: str, storage_path: str, job_id: str) -> d
         job_repo.update_job(job_id, "chunking", progress=0)
         t0 = time.monotonic()
 
-        from app.services.chunker import chunk_document
-        chunks = chunk_document(parsed_doc, router_result.document_type)
-        legal_clauses = None
-        if router_result.document_type == "legal":
-            # Groq-first: extracts clause boundaries AND all metadata in one pass.
-            # Falls back to regex internally when Groq is unavailable or too many
-            # segments fail. Regex fallback produces structural-only clauses →
-            # we run enrich_clauses_batch() after to fill the metadata columns.
+        from app.services.chunker import chunk_document, convert_chunk_to_legal_clause
+
+        # Extract semantic chunks across the document (including LLM chunk classification & metadata)
+        all_chunks = chunk_document(parsed_doc, router_result.document_type)
+
+        # Categorize and partition chunks: legal clauses vs general prose
+        prose_chunks = []
+        clause_list = []
+        for c in all_chunks:
+            if c.semantic_type == "legal_clause":
+                clause_list.append(convert_chunk_to_legal_clause(c, len(clause_list)))
+            else:
+                prose_chunks.append(c)
+
+        legal_clauses = clause_list if clause_list else None
+
+        # Fallback: if document was classified as legal or has legal aspects, but chunking found no clauses,
+        # run extract_clauses_groq
+        if router_result.has_type("legal") and not legal_clauses:
             from app.services.groq_clause_extractor import extract_clauses_groq
             job_repo.update_job(job_id, "chunking", progress=30)
             legal_clauses, _extraction_meta = extract_clauses_groq(parsed_doc)
             logger.info(
-                "[%s] Clause extraction: %d clauses, source=%s%s",
+                "[%s] Clause extraction fallback: %d clauses, source=%s%s",
                 document_id, len(legal_clauses), _extraction_meta.source,
                 f" (fallback: {_extraction_meta.fallback_reason})"
                 if _extraction_meta.fallback_reason else "",
             )
             if _extraction_meta.source == "regex" and legal_clauses:
-                # Regex gave us boundaries only — enrich metadata separately.
                 try:
                     from app.services.clause_enrichment_service import enrich_clauses_batch
                     job_repo.update_job(job_id, "chunking", progress=70)
@@ -292,16 +302,27 @@ def ingest_document(self, document_id: str, storage_path: str, job_id: str) -> d
                 except Exception as _enr_exc:
                     logger.warning("[%s] Clause enrichment failed (non-fatal): %s", document_id, _enr_exc)
 
+        # Reconcile document types if clauses were discovered in a document not originally labeled as legal
+        if legal_clauses and not router_result.has_type("legal"):
+            router_result.document_types.append("legal")
+            router_result.document_type = ", ".join(router_result.document_types)
+            doc_repo.update_status(
+                document_id,
+                document_type=router_result.document_type,
+            )
+            logger.info("[%s] Dynamically reconciled 'legal' into document types: %s", document_id, router_result.document_types)
+
+        chunks = prose_chunks
         stage_times["chunking"] = time.monotonic() - t0
-        total_units = len(legal_clauses or chunks)
+        total_units = len(legal_clauses or []) + len(chunks)
         job_repo.update_job(
             job_id, "chunking", progress=100,
             total_chunks=total_units,
             stage_timing=("chunking", stage_times["chunking"]),
         )
         doc_repo.update_status(document_id, "chunked", chunked_at=True)
-        logger.info("[%s] Chunked: %d units (type=%s)",
-                    document_id, total_units, router_result.document_type)
+        logger.info("[%s] Chunked: %d units (%d text chunks, %d legal clauses, types=%s)",
+                    document_id, total_units, len(chunks), len(legal_clauses or []), router_result.document_types)
 
         # ── Stage 4: EMBEDDING ────────────────────────────────
         job_repo.update_job(job_id, "embedding", progress=0)
@@ -310,17 +331,18 @@ def ingest_document(self, document_id: str, storage_path: str, job_id: str) -> d
         from app.services.embedding_service import embed_passages
         import numpy as np
 
-        if router_result.document_type == "legal" and legal_clauses:
-            texts_to_embed = [c.clause_text for c in legal_clauses]
+        clause_embeddings = None
+        if legal_clauses:
+            clause_texts = [c.clause_text for c in legal_clauses]
+            clause_embeddings = embed_passages(clause_texts) if clause_texts else np.empty((0, 1024), dtype="float32")
+
+        if chunks:
+            prose_texts = [c.chunk_text for c in chunks]
+            embeddings = embed_passages(prose_texts) if prose_texts else np.empty((0, 1024), dtype="float32")
         else:
-            texts_to_embed = [c.chunk_text for c in chunks]
+            embeddings = np.empty((0, 1024), dtype="float32")
 
-        embeddings = embed_passages(texts_to_embed) if texts_to_embed else np.empty((0, 1024), dtype="float32")
-
-        # Embed table summaries for ANY document with tables — tables are a
-        # universal content stream (table_store), not financial-only.
-        # Feature 1.5: use build_table_summary_text() for richer parent summary text
-        # and also build child row-windows + embed them in one batched call.
+        # Embed table summaries for ANY document with tables
         table_embeddings, table_child_chunks, table_child_embeddings = _build_table_embeddings(
             parsed_doc.tables, document_id,
         )
@@ -331,7 +353,8 @@ def ingest_document(self, document_id: str, storage_path: str, job_id: str) -> d
             stage_timing=("embedding", stage_times["embedding"]),
         )
         doc_repo.update_status(document_id, "embedded", embedded_at=True)
-        logger.info("[%s] Embedded: %d vectors (dim=1024)", document_id, len(embeddings))
+        logger.info("[%s] Embedded: %d prose vectors, %d clause vectors (dim=1024)",
+                    document_id, len(embeddings), len(clause_embeddings) if clause_embeddings is not None else 0)
 
         # ── Stage 5: STORING ──────────────────────────────────
         job_repo.update_job(job_id, "storing", progress=0)
@@ -522,7 +545,7 @@ def ingest_document(self, document_id: str, storage_path: str, job_id: str) -> d
             embeddings=embeddings,
             parsed_doc=parsed_doc,
             legal_clauses=legal_clauses,
-            clause_embeddings=embeddings if legal_clauses else None,
+            clause_embeddings=clause_embeddings if legal_clauses else None,
             table_image_paths=table_image_paths,
             table_embeddings=table_embeddings if len(table_embeddings) > 0 else None,
             table_source_image_ids=table_source_image_ids,

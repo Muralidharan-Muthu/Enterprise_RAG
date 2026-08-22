@@ -150,8 +150,7 @@ def route_for_class(content_class: str, canonical_store: str, confidence: float)
     if content_class == CLASS_LEGAL:
         return "clause_store" if confidence >= MIN_CONFIDENCE_FOR_SPECIALIZED else "vector_store"
     if content_class == CLASS_DOCUMENT_TEXT:
-        # Research/citation prose -> document_store; general prose -> vector_store.
-        return "document_store" if canonical_store == "document_store" else "vector_store"
+        return "vector_store"
     if content_class == CLASS_DECORATIVE:
         return "image_store"
     # MIXED / UNKNOWN -> keep searchable as a descriptive vector chunk.

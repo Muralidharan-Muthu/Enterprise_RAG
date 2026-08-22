@@ -361,15 +361,30 @@ def chunk_embed_store_task(self, prev: dict, document_id: str, job_id: str) -> d
         job_repo.update_job(job_id, "chunking", progress=0)
         t0 = time.monotonic()
 
-        from app.services.chunker import chunk_document
-        chunks = chunk_document(parsed_doc, router_result.document_type)
-        legal_clauses = None
-        if router_result.document_type == "legal":
+        from app.services.chunker import chunk_document, convert_chunk_to_legal_clause
+
+        # Extract semantic chunks across the document (including LLM chunk classification & metadata)
+        all_chunks = chunk_document(parsed_doc, router_result.document_type)
+
+        # Categorize and partition chunks: legal clauses vs general prose
+        prose_chunks = []
+        clause_list = []
+        for c in all_chunks:
+            if c.semantic_type == "legal_clause":
+                clause_list.append(convert_chunk_to_legal_clause(c, len(clause_list)))
+            else:
+                prose_chunks.append(c)
+
+        legal_clauses = clause_list if clause_list else None
+
+        # Fallback: if document was classified as legal or has legal aspects, but chunking found no clauses,
+        # run extract_clauses_groq
+        if router_result.has_type("legal") and not legal_clauses:
             from app.services.groq_clause_extractor import extract_clauses_groq
             job_repo.update_job(job_id, "chunking", progress=30)
             legal_clauses, _extraction_meta = extract_clauses_groq(parsed_doc)
             logger.info(
-                "[%s] Clause extraction: %d clauses, source=%s%s",
+                "[%s] Clause extraction fallback: %d clauses, source=%s%s",
                 document_id, len(legal_clauses), _extraction_meta.source,
                 f" (fallback: {_extraction_meta.fallback_reason})"
                 if _extraction_meta.fallback_reason else "",
@@ -387,8 +402,19 @@ def chunk_embed_store_task(self, prev: dict, document_id: str, job_id: str) -> d
                         "[%s] Clause enrichment failed (non-fatal): %s", document_id, _enr_exc,
                     )
 
+        # Reconcile document types if clauses were discovered in a document not originally labeled as legal
+        if legal_clauses and not router_result.has_type("legal"):
+            router_result.document_types.append("legal")
+            router_result.document_type = ", ".join(router_result.document_types)
+            doc_repo.update_status(
+                document_id,
+                document_type=router_result.document_type,
+            )
+            logger.info("[%s] Dynamically reconciled 'legal' into document types: %s", document_id, router_result.document_types)
+
+        chunks = prose_chunks
         stage_times["chunking"] = time.monotonic() - t0
-        total_units = len(legal_clauses or chunks)
+        total_units = len(legal_clauses or []) + len(chunks)
         job_repo.update_job(
             job_id, "chunking", progress=100,
             total_chunks=total_units,
@@ -396,8 +422,8 @@ def chunk_embed_store_task(self, prev: dict, document_id: str, job_id: str) -> d
         )
         doc_repo.update_status(document_id, "chunked", chunked_at=True)
         logger.info(
-            "[%s] Chunked: %d units (type=%s)",
-            document_id, total_units, router_result.document_type,
+            "[%s] Chunked: %d units (%d prose chunks, %d legal clauses, types=%s)",
+            document_id, total_units, len(chunks), len(legal_clauses or []), router_result.document_types,
         )
 
         # ── Stage 4: EMBEDDING ────────────────────────────────
@@ -407,16 +433,16 @@ def chunk_embed_store_task(self, prev: dict, document_id: str, job_id: str) -> d
         from app.services.embedding_service import embed_passages
         import numpy as np
 
-        if router_result.document_type == "legal" and legal_clauses:
-            texts_to_embed = [c.clause_text for c in legal_clauses]
-        else:
-            texts_to_embed = [c.chunk_text for c in chunks]
+        clause_embeddings = None
+        if legal_clauses:
+            clause_texts = [c.clause_text for c in legal_clauses]
+            clause_embeddings = embed_passages(clause_texts) if clause_texts else np.empty((0, 1024), dtype="float32")
 
-        embeddings = (
-            embed_passages(texts_to_embed)
-            if texts_to_embed
-            else np.empty((0, 1024), dtype="float32")
-        )
+        if chunks:
+            prose_texts = [c.chunk_text for c in chunks]
+            embeddings = embed_passages(prose_texts) if prose_texts else np.empty((0, 1024), dtype="float32")
+        else:
+            embeddings = np.empty((0, 1024), dtype="float32")
 
         # Feature 1.5: parent summary + child row-windows
         table_embeddings = np.empty((0, 1024), dtype="float32")
@@ -563,7 +589,7 @@ def chunk_embed_store_task(self, prev: dict, document_id: str, job_id: str) -> d
             embeddings=embeddings,
             parsed_doc=parsed_doc,
             legal_clauses=legal_clauses,
-            clause_embeddings=embeddings if legal_clauses else None,
+            clause_embeddings=clause_embeddings,
             table_image_paths=table_image_paths,
             table_embeddings=table_embeddings if len(table_embeddings) > 0 else None,
             table_extraction=table_extraction,

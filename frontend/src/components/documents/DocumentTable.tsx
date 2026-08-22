@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Trash2, ExternalLink, Loader2, RotateCcw, FileText, CheckCircle2, XCircle } from "lucide-react";
@@ -7,6 +8,7 @@ import { cn, formatDate, formatBytes, capitalize } from "@/lib/utils";
 import type { DocumentSummary, DocumentStatus, DocumentType } from "@/lib/types";
 import { DOC_TYPE_COLORS } from "@/lib/types";
 import { useDeleteDocument, useReprocessDocument } from "@/hooks/useDocuments";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 interface Props {
   documents: DocumentSummary[];
@@ -34,6 +36,16 @@ export function DocumentTable({ documents }: Props) {
     onSuccess: (data) => router.push(`/upload/${data.pipeline_run_id}`),
   });
 
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; filename: string } | null>(null);
+
+  const handleConfirmDelete = () => {
+    if (deleteTarget) {
+      deleteDoc(deleteTarget.id, {
+        onSettled: () => setDeleteTarget(null),
+      });
+    }
+  };
+
   if (documents.length === 0) {
     return (
       <div className="text-center py-16 text-slate-400 dark:text-gray-500 bg-white dark:bg-[#0f172a]/40 rounded-2xl border border-slate-200 dark:border-white/[0.06] shadow-xs">
@@ -60,73 +72,84 @@ export function DocumentTable({ documents }: Props) {
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
             {documents.map((doc) => {
+              const types = (doc.document_type || "unclassified")
+                .split(",")
+                .map((t) => t.trim().toLowerCase())
+                .filter(Boolean);
+
               const isProcessing = PROCESSING_STATUSES.includes(doc.status);
-              const totalChunks =
-                (doc.vector_chunks ?? 0) + (doc.table_count ?? 0) + (doc.clause_count ?? 0);
 
               return (
                 <tr key={doc.id} className="hover:bg-slate-50/80 dark:hover:bg-white/[0.02] transition-colors group">
-                  {/* Document Name */}
-                  <td className="px-6 py-4 max-w-xs">
-                    <Link
-                      href={`/documents/${doc.id}`}
-                      className="font-medium text-slate-800 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1.5 truncate transition-colors"
-                    >
-                      <span className="truncate">{doc.original_filename}</span>
-                      <ExternalLink className="h-3 w-3 flex-shrink-0 opacity-40 group-hover:opacity-100" />
-                    </Link>
-                    {doc.doc_title && doc.doc_title !== doc.original_filename && (
-                      <p className="text-[11px] text-slate-400 dark:text-gray-400 truncate mt-0.5">{doc.doc_title}</p>
-                    )}
+                  {/* Document Name & Meta */}
+                  <td className="px-6 py-4 max-w-[280px]">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-xl bg-slate-100 dark:bg-white/[0.04] text-slate-600 dark:text-gray-300 flex-shrink-0">
+                        <FileText className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href={`/documents/${doc.id}`}
+                          className="font-medium text-slate-900 dark:text-white truncate block hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                          title={doc.original_filename}
+                        >
+                          {doc.original_filename}
+                        </Link>
+                        <div className="flex items-center gap-2 mt-0.5 text-slate-400 dark:text-gray-500 text-[11px]">
+                          <span>{formatBytes(doc.file_size_bytes)}</span>
+                          {doc.word_count && <span>• {doc.word_count.toLocaleString()} words</span>}
+                        </div>
+                      </div>
+                    </div>
                   </td>
 
-                  {/* Document Type Badge */}
+                  {/* Multi-Store Partitions */}
                   <td className="px-6 py-4">
-                    {doc.document_type ? (
-                      <span
-                        className={cn(
-                          "inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border",
-                          DOC_TYPE_COLORS[doc.document_type as DocumentType] || "bg-slate-100 text-slate-700 border-slate-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700"
-                        )}
-                      >
-                        {capitalize(doc.document_type)}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-slate-400 dark:text-gray-500">—</span>
-                    )}
+                    <div className="flex flex-wrap gap-1.5">
+                      {types.map((type) => {
+                        const styleClass =
+                          DOC_TYPE_COLORS[type as DocumentType] ||
+                          "bg-slate-100 text-slate-700 border-slate-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700";
+                        return (
+                          <span
+                            key={type}
+                            className={cn(
+                              "inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium border",
+                              styleClass
+                            )}
+                          >
+                            {capitalize(type)}
+                          </span>
+                        );
+                      })}
+                    </div>
                   </td>
 
-                  {/* Status Badge */}
+                  {/* Processing Status */}
                   <td className="px-6 py-4">
                     <span
                       className={cn(
-                        "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border",
-                        STATUS_STYLES[doc.status] || "bg-slate-100 text-slate-600 dark:bg-gray-800 dark:text-gray-400"
+                        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium",
+                        STATUS_STYLES[doc.status] || STATUS_STYLES.uploaded
                       )}
                     >
                       {isProcessing ? (
                         <Loader2 className="h-3 w-3 animate-spin" />
                       ) : doc.status === "completed" ? (
                         <CheckCircle2 className="h-3 w-3" />
-                      ) : (
+                      ) : doc.status === "failed" ? (
                         <XCircle className="h-3 w-3" />
-                      )}
+                      ) : null}
                       {capitalize(doc.status)}
                     </span>
                   </td>
 
-                  {/* Chunks */}
+                  {/* Chunk Count */}
                   <td className="px-6 py-4 font-mono text-slate-700 dark:text-gray-300 text-xs">
-                    {totalChunks > 0 ? (
-                      <span title={`Vector: ${doc.vector_chunks}, Tables: ${doc.table_count}, Clauses: ${doc.clause_count}, Research: ${doc.research_chunks}`}>
-                        {totalChunks}
-                      </span>
-                    ) : (
-                      <span className="text-slate-400 dark:text-gray-500">—</span>
-                    )}
+                    {doc.chunk_count?.toLocaleString() ?? "—"}
                   </td>
 
-                  {/* Pages */}
+                  {/* Page Count */}
                   <td className="px-6 py-4 font-mono text-slate-700 dark:text-gray-300 text-xs">
                     {doc.page_count ?? "—"}
                   </td>
@@ -152,11 +175,7 @@ export function DocumentTable({ documents }: Props) {
                       )}
                       <button
                         type="button"
-                        onClick={() => {
-                          if (confirm(`Delete document "${doc.original_filename}"? All chunks and embeddings will be removed.`)) {
-                            deleteDoc(doc.id);
-                          }
-                        }}
+                        onClick={() => setDeleteTarget({ id: doc.id, filename: doc.original_filename })}
                         disabled={isDeleting}
                         className="text-slate-400 hover:text-red-600 dark:text-gray-500 dark:hover:text-red-400 p-1 transition-colors"
                         title="Delete Document"
@@ -171,6 +190,26 @@ export function DocumentTable({ documents }: Props) {
           </tbody>
         </table>
       </div>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Document"
+        description={
+          <span>
+            Are you sure you want to permanently delete{" "}
+            <strong className="font-semibold text-slate-900 dark:text-white">
+              &ldquo;{deleteTarget?.filename}&rdquo;
+            </strong>
+            ? All its chunks, embeddings, tables, legal clauses, and graph links will be removed across all stores.
+          </span>
+        }
+        confirmText="Delete Document"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

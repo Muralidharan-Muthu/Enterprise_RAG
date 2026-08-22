@@ -27,7 +27,7 @@ from app.services import groq_client
 
 logger = logging.getLogger(__name__)
 
-ALL_STORES = ["vector", "clause", "research", "table", "image"]
+ALL_STORES = ["vector", "clause", "table", "image"]
 
 _SYSTEM_PROMPT = (
     "You are RAVEN, a query pre-processor for a multi-store RAG system. "
@@ -35,12 +35,12 @@ _SYSTEM_PROMPT = (
     "  reframed   : a clearer, search-optimised restatement of the query\n"
     "  sub_queries: list of 0-3 focused sub-questions (empty list if not needed)\n"
     "  store_hint : null, or an object with:\n"
-    "               stores: list from [vector, clause, research, table, image]\n"
-    "               doc_types: list from [policy, financial, legal, research, entity] or null\n"
+    "               stores: list from [vector, clause, table, image]\n"
+    "               doc_types: list from [policy, financial, legal, entity] or null\n"
     "               confidence: float 0-1\n"
     "Respond with ONLY the raw JSON object — no markdown fences, no extra text.\n"
     "Stores: vector=policy/general text, clause=legal/contract, "
-    "research=scientific papers, table=financial/numeric tables, image=figures/charts."
+    "table=financial/numeric tables, image=figures/charts."
 )
 
 _FALLBACK_SHAPE = {
@@ -122,6 +122,7 @@ async def reframe(query: str) -> dict:
             ],
             max_tokens=256,
             temperature=0.0,
+            model=settings.GROQ_RAVEN_MODEL,
         )
         parsed = _parse_raven(raw)
         if parsed:

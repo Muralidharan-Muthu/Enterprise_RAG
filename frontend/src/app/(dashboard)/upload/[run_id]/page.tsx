@@ -29,20 +29,6 @@ const STAGE_LABELS: Record<string, string> = {
   chunking: "Chunking", embedding: "Embedding", storing: "Storing", graph: "Graph", done: "Done",
 };
 
-// Expected durations (seconds) for the est-time label and fill %. Calibrated
-// from real stage_timings on CPU: parsing 12–180s (OCR-bound), image
-// captioning ~8s/image, others quick. These are typical-case anchors, NOT
-// caps — when a stage runs past its estimate the card switches to an
-// indeterminate "running" state with a live elapsed counter instead of a
-// frozen 99% bar, so a slow-but-healthy stage never reads as stuck.
-const STAGE_ESTIMATES: Record<string, number> = {
-  queued: 1, parsing: 45, images: 60, routing: 3, chunking: 3, embedding: 4, storing: 8, graph: 3, done: 0,
-};
-
-// Per-stage colour identity for the COMPLETED state — each stage reads as a
-// distinct hue (light + dark) so the flow looks like a coloured ladder instead
-// of an undifferentiated wall of green. Full literal class strings so Tailwind's
-// scanner picks them up. In-progress stays blue, error stays red, pending gray.
 interface StageColor { border: string; text: string; fill: string; base: string; ring: string; pill: string; }
 const STAGE_COLORS: Record<string, StageColor> = {
   queued: {
@@ -91,20 +77,6 @@ const STAGE_COLORS: Record<string, StageColor> = {
     ring: "ring-emerald-400 dark:ring-emerald-600", pill: "bg-emerald-200/50 dark:bg-emerald-500/20",
   },
 };
-
-// Adaptive estimate: once the pre-scan workload map is in (page + image
-// counts), parsing/images scale with the REAL workload instead of a flat
-// guess — a 15-image doc no longer reads "~45s" while actually taking ~2min.
-// CPU rule-of-thumb: ~8s OCR per page, ~6s per image to render, ~8s per image
-// to caption+embed in the images stage.
-function estimateFor(stage: string, doc: PipelineDocumentDetail): number {
-  const pages = doc.stage_detail?.parsing?.pages ?? [];
-  const nPages = doc.page_count ?? doc.stage_detail?.parsing?.total_pages ?? pages.length;
-  const nImages = pages.reduce((s, p) => s + (p.images || 0), 0);
-  if (stage === "parsing" && nPages) return Math.max(15, Math.round(nPages * 8 + nImages * 6));
-  if (stage === "images" && nImages) return Math.max(10, Math.round(nImages * 8));
-  return STAGE_ESTIMATES[stage] ?? 5;
-}
 
 function fmtTime(seconds: number, live = false): string {
   if (seconds < 0.05) return "< 0.1s";
@@ -231,8 +203,7 @@ function DocumentRow({ doc }: { doc: PipelineDocumentDetail }) {
                 {doc.vector_chunks > 0 && <span className="text-blue-500">{doc.vector_chunks} vectors</span>}
                 {doc.table_count > 0 && <span className="text-green-600 dark:text-green-300">{doc.table_count} tables</span>}
                 {doc.clause_count > 0 && <span className="text-purple-600 dark:text-purple-300">{doc.clause_count} clauses</span>}
-                {doc.research_chunks > 0 && <span className="text-orange-500">{doc.research_chunks} chunks</span>}
-                {doc.vector_chunks === 0 && doc.table_count === 0 && doc.clause_count === 0 && doc.research_chunks === 0 && (
+                {doc.vector_chunks === 0 && doc.table_count === 0 && doc.clause_count === 0 && (
                   <span>0 chunks</span>
                 )}
               </>
@@ -407,10 +378,7 @@ function DocumentDetailPanel({ doc }: { doc: PipelineDocumentDetail }) {
             {doc.clause_count > 0 && (
               <Pill label="Clauses" value={String(doc.clause_count)} accent="purple" />
             )}
-            {doc.research_chunks > 0 && (
-              <Pill label="Research Chunks" value={String(doc.research_chunks)} accent="orange" />
-            )}
-            {doc.vector_chunks === 0 && doc.table_count === 0 && doc.clause_count === 0 && doc.research_chunks === 0 && (
+            {doc.vector_chunks === 0 && doc.table_count === 0 && doc.clause_count === 0 && (
               <span className="text-xs text-gray-400 dark:text-gray-500">No chunks stored</span>
             )}
           </div>
@@ -544,7 +512,6 @@ function StageFlow({ doc }: { doc: PipelineDocumentDetail }) {
         {displayedStages.map((stage, dispIdx) => {
           const idx = STAGES.indexOf(stage);
           const timing = timings[stage];
-          const estimate = estimateFor(stage, doc);
           const isError = isFailed && stage === failedStage;
           const isDone = (idx < activeIdx || isCompleted) && !isError;
           const isCurrent = stage === doc.current_stage && !isDone && !isFailed;
@@ -557,23 +524,17 @@ function StageFlow({ doc }: { doc: PipelineDocumentDetail }) {
           const isExpanded = selectedStage === stage;
           const c = STAGE_COLORS[stage] ?? STAGE_COLORS.done;
 
-          // Overrun: live stage has blown past its estimate with no real
-          // progress signal → show an indeterminate "working" state rather
-          // than a fake 99% that looks frozen.
-          const overrun = isCurrent && doc.stage_progress <= 0 && estimate > 0 && elapsed > estimate;
           const fillPct = isDone
             ? 100
             : isCurrent
-              ? (doc.stage_progress > 0
-                ? doc.stage_progress
-                : overrun ? 95 : estimate > 0 ? Math.min(95, (elapsed / estimate) * 100) : 50)
+              ? (doc.stage_progress > 0 ? doc.stage_progress : 100)
               : 0;
 
           const timingLabel = isDone && timing != null
             ? fmtTime(timing)
             : isCurrent
-              ? (overrun ? `${fmtTime(elapsed, true)} · working…` : `${fmtTime(elapsed, true)} / ~${estimate}s`)
-              : estimate > 0 ? `~${estimate}s est.` : null;
+              ? fmtTime(elapsed, true)
+              : null;
 
           const resultHint = isDone
             ? stage === "parsing" && doc.page_count != null
@@ -583,7 +544,7 @@ function StageFlow({ doc }: { doc: PipelineDocumentDetail }) {
                 : stage === "chunking" && doc.total_chunks != null
                   ? `${doc.total_chunks} chunks`
                   : stage === "storing" && isCompleted
-                    ? `${doc.vector_chunks + doc.table_count + doc.clause_count + doc.research_chunks} stored`
+                    ? `${doc.vector_chunks + doc.table_count + doc.clause_count} stored`
                     : null
             : null;
 
@@ -609,8 +570,7 @@ function StageFlow({ doc }: { doc: PipelineDocumentDetail }) {
                   className={cn(
                     "absolute inset-0 transition-all duration-500 ease-out",
                     isDone && !isError && c.fill,
-                    isCurrent && !isFailed && "bg-blue-100 dark:bg-blue-950",
-                    isCurrent && overrun && "animate-pulse",
+                    isCurrent && !isFailed && "bg-blue-100 dark:bg-blue-950 animate-pulse",
                     isError && "bg-red-100 dark:bg-red-950",
                     isPending && "bg-gray-50 dark:bg-gray-800/50",
                   )}
@@ -807,8 +767,7 @@ function StageDetailContent({
             {doc.vector_chunks > 0 && <Pill label="Vector Chunks" value={String(doc.vector_chunks)} accent="blue" />}
             {doc.table_count > 0 && <Pill label="Tables" value={String(doc.table_count)} accent="green" />}
             {doc.clause_count > 0 && <Pill label="Clauses" value={String(doc.clause_count)} accent="purple" />}
-            {doc.research_chunks > 0 && <Pill label="Research Chunks" value={String(doc.research_chunks)} accent="orange" />}
-            {isCompleted && doc.vector_chunks === 0 && doc.table_count === 0 && doc.clause_count === 0 && doc.research_chunks === 0 && (
+            {isCompleted && doc.vector_chunks === 0 && doc.table_count === 0 && doc.clause_count === 0 && (
               <span className="text-xs text-gray-400 dark:text-gray-500">No chunks stored</span>
             )}
           </div>

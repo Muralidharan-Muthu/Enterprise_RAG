@@ -56,18 +56,11 @@ def assemble_chunk_records(
     stored_ids is dict[str, list[str]] returned by store_chunks():
         "vector_store"   → UUIDs in insertion order (mirrors chunks list)
         "clause_store"   → UUIDs (mirrors legal_clauses list)
-        "document_store" → UUIDs (mirrors chunks for research docs)
         "table_store"    → UUIDs (mirrors parsed_doc.tables)
-
-    Mapping rules:
-      legal   → clause_store, paired with legal_clauses by index
-      research → document_store, paired with chunks by index
-      else    → vector_store, paired with chunks by index
     """
-    doc_type = getattr(router_result, "document_type", "") or ""
     records: list[dict] = []
 
-    if doc_type == "legal" and legal_clauses:
+    if legal_clauses:
         pg_ids = stored_ids.get("clause_store", [])
         for i, clause in enumerate(legal_clauses):
             if i >= len(pg_ids):
@@ -77,30 +70,18 @@ def assemble_chunk_records(
                 "chunk_index": i,
                 "pg_id": pg_ids[i],
                 "page_number": getattr(clause, "page_number", None),
-                "section_title": getattr(clause, "clause_type", None),
+                "section_title": getattr(clause, "clause_type", None) or getattr(clause, "clause_title", None),
                 "text": (getattr(clause, "clause_text", "") or "").strip(),
             })
-    elif doc_type == "research":
-        pg_ids = stored_ids.get("document_store", [])
-        for i, chunk in enumerate(chunks):
-            if i >= len(pg_ids):
-                break
-            records.append({
-                "store": "document_store",
-                "chunk_index": i,
-                "pg_id": pg_ids[i],
-                "page_number": getattr(chunk, "page_number", None),
-                "section_title": getattr(chunk, "section_title", None),
-                "text": (getattr(chunk, "chunk_text", "") or "").strip(),
-            })
-    else:
+
+    if chunks:
         pg_ids = stored_ids.get("vector_store", [])
         for i, chunk in enumerate(chunks):
             if i >= len(pg_ids):
                 break
             records.append({
                 "store": "vector_store",
-                "chunk_index": i,
+                "chunk_index": i + len(records),
                 "pg_id": pg_ids[i],
                 "page_number": getattr(chunk, "page_number", None),
                 "section_title": getattr(chunk, "section_title", None),
@@ -514,16 +495,13 @@ def _signal_community_recompute(document_id: str) -> None:
 # ingestion run.
 _STORE_TEXT_COLUMN = {
     "clause_store": "clause_text",
-    "document_store": "chunk_text",
     "vector_store": "chunk_text",
 }
 
 
 def _store_for_doc_type(doc_type: str) -> str:
-    if doc_type == "legal":
+    if "legal" in (doc_type or ""):
         return "clause_store"
-    if doc_type == "research":
-        return "document_store"
     return "vector_store"
 
 

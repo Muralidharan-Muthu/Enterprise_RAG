@@ -1,11 +1,12 @@
-export type DocumentType = "policy" | "financial" | "legal" | "entity" | "research";
+export type DocumentType = "policy" | "financial" | "legal" | "entity";
 export type DocumentStatus = "uploaded" | "parsing" | "routing" | "chunking" | "embedding" | "storing" | "completed" | "failed";
 export type PipelineStage = "queued" | "parsing" | "images" | "routing" | "chunking" | "embedding" | "storing" | "graph" | "done" | "error";
 
 export interface DocumentSummary {
   id: string;
   original_filename: string;
-  document_type: DocumentType | null;
+  document_type: DocumentType | string | null;
+  document_types?: string[];
   document_subtype: string | null;
   status: DocumentStatus;
   page_count: number | null;
@@ -16,7 +17,6 @@ export interface DocumentSummary {
   vector_chunks: number;
   table_count: number;
   clause_count: number;
-  research_chunks: number;
   completed_at: string | null;
   created_at: string;
   error_message: string | null;
@@ -125,7 +125,8 @@ export interface PipelineDocumentDetail {
   original_filename: string;
   file_size_bytes: number;
   doc_status: DocumentStatus;
-  document_type: DocumentType | null;
+  document_type: DocumentType | string | null;
+  document_types?: string[];
   router_confidence: number | null;
   doc_title: string | null;
   page_count: number | null;
@@ -135,7 +136,6 @@ export interface PipelineDocumentDetail {
   vector_chunks: number;
   table_count: number;
   clause_count: number;
-  research_chunks: number;
   error_stage: string | null;
   error_message: string | null;
   current_stage: PipelineStage | null;
@@ -247,8 +247,6 @@ export const DOC_TYPE_COLORS: Record<DocumentType, string> = {
     "bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-900",
   entity:
     "bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-900",
-  research:
-    "bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-900",
 };
 
 export const PIPELINE_STAGES: PipelineStage[] = [
@@ -285,7 +283,7 @@ export interface CitationItem {
   document_id: string;
   filename: string;
   chunk_text: string;
-  store_type: "vector" | "clause" | "research" | "table" | "image";
+  store_type: "vector" | "clause" | "table" | "image";
   relevance_score: number;
   page_number: number | null;
   /** Last page of a multi-page table window, when different from page_number.

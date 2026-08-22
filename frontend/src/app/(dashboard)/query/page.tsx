@@ -190,7 +190,6 @@ function traceStoreLabel(store: string): string {
   const labels: Record<string, string> = {
     vector: "Document",
     clause: "Legal clauses",
-    research: "Research",
     table: "Tables",
     image: "Images",
     graph: "Neo4j graph",
@@ -213,7 +212,6 @@ function traceStoreNames(stores: unknown): string {
 const STORE_META: Record<string, { label: string; color: string; icon: typeof BookOpen; title: string }> = {
   vector:   { label: "Document", title: "Semantic vector search on document text",     color: "bg-blue-500/10 text-blue-400 border-blue-500/20",      icon: Zap },
   clause:   { label: "Legal",    title: "Legal clause store",                           color: "bg-purple-500/10 text-purple-400 border-purple-500/20", icon: Shield },
-  research: { label: "Research", title: "Research & academic content store",            color: "bg-amber-500/10 text-amber-400 border-amber-500/20",   icon: BookOpen },
   table:    { label: "Table",    title: "Structured table data store",                  color: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20", icon: FileText },
   image:    { label: "Image",    title: "Image & figure store",                         color: "bg-pink-500/10 text-pink-400 border-pink-500/20",      icon: FileText },
   graph:    { label: "Graph",    title: "Neo4j knowledge graph (entity/community reasoning)", color: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20", icon: Network },

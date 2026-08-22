@@ -59,13 +59,6 @@ export function ParsingDetail({ doc, live, elapsed }: Props) {
   const sumImages = donePages.reduce((s, p) => s + (p.images ?? 0), 0);
   const language = pageStats?.language ? pageStats.language.toUpperCase() : "EN";
 
-  // ETA from real page rate
-  let eta: string | null = null;
-  if (live && elapsed && pagesDone > 0 && pagesDone < total) {
-    const remaining = (total - pagesDone) * (elapsed / pagesDone);
-    eta = fmtTime(remaining);
-  }
-
   // Build rows:
   // - Live + total known: show ALL page slots immediately (parallel parsing).
   //   Known pages get real data; unknown slots get placeholder state.
@@ -97,7 +90,7 @@ export function ParsingDetail({ doc, live, elapsed }: Props) {
           {live ? <Loader2 className="w-3.5 h-3.5 text-indigo-500 animate-spin" /> : <FileText className="w-3.5 h-3.5 text-slate-500 dark:text-zinc-400" />}
           <span className="text-xs font-semibold text-slate-700 dark:text-zinc-300 uppercase tracking-wider">{live ? "Parsing — Live" : "Parsing Detail"}</span>
         </div>
-        {live && elapsed != null && <span className="text-xs tabular-nums text-slate-400 dark:text-zinc-500">{fmtTime(elapsed)}{eta ? ` · ~${eta} left` : ""}</span>}
+        {live && elapsed != null && <span className="text-xs tabular-nums text-slate-400 dark:text-zinc-500">{fmtTime(elapsed)}</span>}
       </div>
 
       {/* overall page progress (live) */}

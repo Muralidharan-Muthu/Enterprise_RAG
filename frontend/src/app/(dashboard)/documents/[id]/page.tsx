@@ -70,16 +70,27 @@ export default function DocumentDetailPage() {
             {doc.document_type && (
               <div>
                 <p className="text-xs text-gray-400 dark:text-gray-300 mb-1">Document Type</p>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={cn(
-                      "inline-flex items-center px-2.5 py-1 rounded-full text-sm font-medium border",
-                      DOC_TYPE_COLORS[doc.document_type as DocumentType]
-                    )}
-                  >
-                    {capitalize(doc.document_type)}
-                    {doc.document_subtype && ` · ${doc.document_subtype}`}
-                  </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {(doc.document_types && doc.document_types.length > 0
+                    ? doc.document_types
+                    : doc.document_type.split(",").map((s) => s.trim())
+                  ).map((t) => (
+                    <span
+                      key={t}
+                      className={cn(
+                        "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border",
+                        DOC_TYPE_COLORS[t as DocumentType] ||
+                          "bg-slate-100 text-slate-700 border-slate-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700"
+                      )}
+                    >
+                      {capitalize(t)}
+                    </span>
+                  ))}
+                  {doc.document_subtype && (
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      · {doc.document_subtype}
+                    </span>
+                  )}
                 </div>
                 {doc.router_confidence !== null && (
                   <div className="mt-2">
@@ -172,7 +183,6 @@ export default function DocumentDetailPage() {
             vectorChunks={doc.vector_chunks}
             tableCount={doc.table_count}
             clauseCount={doc.clause_count}
-            researchChunks={doc.research_chunks}
           />
         ) : doc.status === "failed" ? (
           <p className="text-sm text-gray-400 dark:text-gray-300 py-8 text-center">

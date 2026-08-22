@@ -62,23 +62,24 @@ _last_check_at = 0.0
 _last_check_result = False
 
 
+_last_driver_attempt_at = 0.0
+
 def _get_driver():
     """Lazy singleton. Returns a neo4j Driver, or None when graph is disabled or
     the driver can't be constructed (so callers degrade silently)."""
-    global _driver, _driver_failed
+    global _driver, _driver_failed, _last_driver_attempt_at
     if not settings.NEO4J_ENABLED:
         return None
     if _driver is not None:
         return _driver
-    if _driver_failed:
+    
+    now = time.monotonic()
+    if _driver_failed and (now - _last_driver_attempt_at < 15.0):
         return None
+
+    _last_driver_attempt_at = now
     try:
         from neo4j import GraphDatabase
-        # Aura-tailored connection pool options:
-        # 1. max_connection_lifetime: Recycles connections before Aura's load balancer drops idle TCP sockets (120s).
-        # 2. liveness_check_timeout: Proactively tests socket health if idle > 15s before running queries.
-        # 3. keep_alive: Enables TCP keep-alive probes to prevent intermediate TLS proxy timeouts.
-        # 4. Suppress benign neo4j.io EOF disconnect logs on idle connection drop.
         logging.getLogger("neo4j.io").setLevel(logging.CRITICAL)
         logging.getLogger("neo4j.pool").setLevel(logging.WARNING)
 
@@ -91,17 +92,19 @@ def _get_driver():
             max_connection_pool_size=50,
             connection_acquisition_timeout=30.0,
         )
+        _driver_failed = False
         return _driver
     except Exception as exc:
-        logger.warning("Neo4j driver init failed (%s) — graph features disabled", exc)
+        logger.warning("Neo4j driver init failed (%s) — graph features degraded", exc)
         _driver_failed = True
         return None
 
 
 def _session(drv):
     """Open a session, specifying database when NEO4J_DATABASE is set (required for Aura)."""
-    if settings.NEO4J_DATABASE:
-        return drv.session(database=settings.NEO4J_DATABASE)
+    db = (settings.NEO4J_DATABASE or "").strip()
+    if db:
+        return drv.session(database=db)
     return drv.session()
 
 
@@ -780,40 +783,46 @@ def communities_by_embedding(query_emb: list, limit: int = 8) -> list[dict]:
 
 
 def clear_document_graph(document_id: str) -> None:
-    """Remove this document's contribution to the graph before re-ingestion.
+    """Remove this document's contribution to the graph upon deletion or re-ingestion.
 
-    Because entities are shared across documents (MERGEd by key), we do NOT
-    delete entities another document still references — we only unlink THIS
-    document: drop its MENTIONED_IN edges, strip its id from every entity/
-    relationship metadata array, delete knowledge edges left with no owning
-    document, and finally delete entities orphaned (no MENTIONED_IN left).
-    Also purges any legacy Chunk nodes from the old schema. No-op on failure.
+    Cascade behavior:
+    1. Collects all entities that mention or reference this document ID.
+    2. Drops MENTIONED_IN edges to this document.
+    3. Strips document_id from entity and relationship metadata arrays.
+    4. Deletes relationships that no longer have any associated documents.
+    5. Deletes orphaned Entity nodes (entities no longer referenced by any remaining document).
+    6. Deletes orphaned Community clusters that no longer contain any entities.
+    7. Deletes legacy Chunk nodes and the Document node itself.
+    8. If no Document nodes remain in the graph, purges any leftover disconnected nodes.
     """
     drv = _get_driver()
     if drv is None or not document_id:
         return
     try:
         with _session(drv) as session:
-            # 1. Drop this doc's traceability edges, but first collect WHICH
-            #    entities they touched — every later step is scoped to exactly
-            #    this set, so entities/edges belonging only to OTHER documents
-            #    (including legacy pre-refactor entities with no MENTIONED_IN at
-            #    all) are never touched. This was the bug: earlier steps 3/5 ran
-            #    unscoped across the whole database and deleted unrelated data.
+            # 1. Collect all entity keys linked to this document (via MENTIONED_IN or doc_ids property)
             result = session.run(
                 """
-                MATCH (e:Entity)-[m:MENTIONED_IN]->(:Document {id: $doc_id})
-                WITH e, m
-                DELETE m
+                MATCH (e:Entity)
+                WHERE (e)-[:MENTIONED_IN]->(:Document {id: $doc_id})
+                   OR $doc_id IN coalesce(e.doc_ids, [])
                 RETURN DISTINCT e.key AS key
                 """,
                 doc_id=document_id,
             )
             touched_keys = [r["key"] for r in result if r["key"]]
 
+            # 2. Delete MENTIONED_IN edges to this document
+            session.run(
+                """
+                MATCH (:Entity)-[m:MENTIONED_IN]->(d:Document {id: $doc_id})
+                DELETE m
+                """,
+                doc_id=document_id,
+            )
+
             if touched_keys:
-                # 2. Strip this doc from relationship metadata + weight, scoped to
-                #    edges touching a touched entity.
+                # 3. Strip this doc from relationship metadata + weight
                 session.run(
                     """
                     MATCH (a:Entity)-[r]->(b:Entity)
@@ -824,8 +833,7 @@ def clear_document_graph(document_id: str) -> None:
                     """,
                     keys=touched_keys, doc_id=document_id,
                 )
-                # 3. Delete knowledge edges (among touched entities) no document
-                #    references anymore.
+                # 4. Delete relationships no document references anymore
                 session.run(
                     """
                     MATCH (a:Entity)-[r]->(b:Entity)
@@ -835,7 +843,7 @@ def clear_document_graph(document_id: str) -> None:
                     """,
                     keys=touched_keys,
                 )
-                # 4. Strip this doc from touched entities' metadata arrays.
+                # 5. Strip this doc from touched entities' metadata arrays
                 session.run(
                     """
                     MATCH (e:Entity) WHERE e.key IN $keys
@@ -843,31 +851,74 @@ def clear_document_graph(document_id: str) -> None:
                     """,
                     keys=touched_keys, doc_id=document_id,
                 )
-                # 5. Delete touched entities now orphaned (no document mentions
-                #    them anymore) — scoped, never touches other documents' entities.
+                # 6. Delete touched entities now orphaned (no document mentions them)
                 session.run(
                     """
                     MATCH (e:Entity) WHERE e.key IN $keys
                       AND NOT (e)-[:MENTIONED_IN]->(:Document)
+                      AND (e.doc_ids IS NULL OR size(e.doc_ids) = 0)
                     DETACH DELETE e
                     """,
                     keys=touched_keys,
                 )
 
-            # 6. Legacy cleanup: purge Chunk nodes from the pre-refactor schema
-            #    for THIS document only.
+            # 7. Delete orphaned Community clusters that no longer contain entities
+            session.run(
+                """
+                MATCH (com:Community)
+                WHERE NOT (com)<-[:IN_COMMUNITY]-(:Entity)
+                DETACH DELETE com
+                """
+            )
+
+            # 8. Legacy cleanup: purge Chunk nodes for THIS document only
             session.run(
                 "MATCH (c:Chunk {document_id: $doc_id}) DETACH DELETE c",
                 doc_id=document_id,
             )
-            # 7. Delete the Document node itself.
+            # 9. Delete the Document node itself
             session.run(
                 "MATCH (d:Document {id: $doc_id}) DETACH DELETE d",
                 doc_id=document_id,
             )
-        logger.debug("[%s] clear_document_graph done (%d entities touched)", document_id, len(touched_keys))
+
+            # 10. If zero Document nodes remain in the database, wipe any leftover disconnected nodes
+            doc_count_res = session.run("MATCH (d:Document) RETURN count(d) AS cnt")
+            doc_count = doc_count_res.single()["cnt"] if doc_count_res else 0
+            if doc_count == 0:
+                session.run("MATCH (n) DETACH DELETE n")
+                logger.info("[%s] All documents deleted — purged remaining Neo4j graph nodes", document_id)
+
+        logger.debug("[%s] clear_document_graph completed successfully (%d entities checked)", document_id, len(touched_keys))
     except Exception as exc:
         logger.warning("[%s] clear_document_graph failed (non-fatal): %s", document_id, exc)
+
+
+def clear_all_graph_data() -> dict[str, int]:
+    """Completely wipe all nodes and relationships from Neo4j.
+
+    Returns a dict with pre-wipe node and relationship counts.
+    """
+    drv = _get_driver()
+    if drv is None:
+        return {"nodes_deleted": 0, "relationships_deleted": 0}
+    try:
+        with _session(drv) as session:
+            # Get counts before deletion
+            cnt_res = session.run(
+                "MATCH (n) OPTIONAL MATCH ()-[r]->() RETURN count(DISTINCT n) AS nodes, count(DISTINCT r) AS rels"
+            )
+            rec = cnt_res.single()
+            nodes_cnt = rec["nodes"] if rec else 0
+            rels_cnt = rec["rels"] if rec else 0
+
+            # Detach delete all nodes
+            session.run("MATCH (n) DETACH DELETE n")
+            logger.info("Purged all Neo4j graph data (%d nodes, %d relationships)", nodes_cnt, rels_cnt)
+            return {"nodes_deleted": nodes_cnt, "relationships_deleted": rels_cnt}
+    except Exception as exc:
+        logger.error("clear_all_graph_data failed: %s", exc)
+        raise
 
 
 def get_graph_stats() -> dict:

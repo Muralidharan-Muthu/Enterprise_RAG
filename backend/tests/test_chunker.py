@@ -67,11 +67,81 @@ def test_legal_clause_extraction():
         assert clause.clause_index >= 0
 
 
-def test_chunk_research_type():
+def test_chunk_entity_type():
     doc = _make_doc([
-        ("Abstract: This paper investigates the effects of RAG on LLM accuracy.", "paragraph"),
-        ("Methodology: We conducted experiments on 100 documents from enterprise domains.", "paragraph"),
-        ("Results: RAG improved accuracy by 23% compared to baseline models.", "paragraph"),
+        ("Overview: This report outlines the corporate hierarchy and subsidiaries.", "paragraph"),
+        ("Structure: The parent organization owns 100% of the active retail entities.", "paragraph"),
+        ("Operations: Key directors and branch offices are distributed regionally.", "paragraph"),
     ])
-    chunks = chunk_document(doc, "research")
+    chunks = chunk_document(doc, "entity")
     assert len(chunks) >= 1
+
+
+def test_detect_clause_nature_numbered_clauses():
+    from app.services.chunker import detect_clause_nature
+
+    # Test 1: Termination for cause
+    text1 = (
+        "1. TERMINATION FOR CAUSE (IMMEDIATE ACTION)\n"
+        "RIL's contracts contain unilateral, immediate termination rights in the event of default."
+    )
+    is_c1, num1, title1, type1 = detect_clause_nature(text1, "Key Contractual Clauses & Legal Framework")
+    assert is_c1 is True
+    assert num1 == "1"
+    assert "TERMINATION FOR CAUSE" in title1
+    assert type1 == "termination"
+
+    # Test 2: Termination without cause
+    text2 = (
+        "2. TERMINATION WITHOUT CAUSE (NOTICE PROVISIONS)\n"
+        "Standard operational contracts feature balanced exit options. Termination without cause is strictly governed by written notice."
+    )
+    is_c2, num2, title2, type2 = detect_clause_nature(text2, "Key Contractual Clauses & Legal Framework")
+    assert is_c2 is True
+    assert num2 == "2"
+    assert "TERMINATION WITHOUT CAUSE" in title2
+    assert type2 == "termination"
+
+    # Test 3: Dispute resolution & jurisdiction
+    text3 = (
+        "3. DISPUTE RESOLUTION & EXCLUSIVE JURISDICTION\n"
+        "All commercial agreements feature standard binding dispute resolution clauses. Designated exclusive legal jurisdiction is Mumbai, India."
+    )
+    is_c3, num3, title3, type3 = detect_clause_nature(text3, "Key Contractual Clauses & Legal Framework")
+    assert is_c3 is True
+    assert num3 == "3"
+    assert "DISPUTE RESOLUTION" in title3
+    assert type3 == "dispute_resolution"
+
+
+def test_convert_chunk_to_legal_clause():
+    from app.models.document import Chunk
+    from app.services.chunker import convert_chunk_to_legal_clause
+
+    c = Chunk(
+        chunk_index=0,
+        chunk_text="1. TERMINATION FOR CAUSE\nImmediate termination rights upon bankruptcy or material breach.",
+        page_number=7,
+        page_numbers=[7],
+        section_title="Key Contractual Clauses",
+        section_level=1,
+        semantic_type="legal_clause",
+        keywords=["termination", "breach"],
+        token_count=15,
+        chunk_metadata={
+            "clause_number": "1",
+            "clause_title": "TERMINATION FOR CAUSE",
+            "clause_type": "termination",
+            "risk_level": "high",
+            "risk_rationale": "Immediate termination risk without notice",
+            "parties_mentioned": ["RIL", "Vendor"],
+        }
+    )
+    lc = convert_chunk_to_legal_clause(c, 0)
+    assert lc.clause_index == 0
+    assert lc.clause_number == "1"
+    assert lc.clause_title == "TERMINATION FOR CAUSE"
+    assert lc.clause_type == "termination"
+    assert lc.risk_level == "high"
+    assert lc.page_number == 7
+    assert "RIL" in lc.parties_mentioned

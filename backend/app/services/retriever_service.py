@@ -19,7 +19,7 @@ RETRIEVAL_TOP_K_PER_STORE = 15
 # no embedding column (migration 008). Image-derived content that is searchable
 # was cross-stored into vector/table/clause/document by store_image_derived_chunks
 # and is retrieved from those stores instead.
-ALL_STORE_KEYS = ["vector", "clause", "research", "table"]
+ALL_STORE_KEYS = ["vector", "clause", "table"]
 
 # Below this intent confidence we don't trust the narrowed store set — search all
 # stores instead (recall-safe). At/above it, honor the intent's minimal set so a
@@ -35,8 +35,7 @@ def _select_stores(document_types, use_intent: bool, intent: dict | None) -> dic
         return {
             "vector": any(dt in document_types for dt in ["policy", "entity", "financial"]),
             "clause": "legal" in document_types,
-            "research": "research" in document_types,
-            "table": "financial" in document_types,
+            "table": "financial" in document_types or any(dt in document_types for dt in ["policy", "entity", "financial"]),
         }
     if use_intent and intent and intent.get("confidence", 0.0) >= INTENT_CONFIDENCE_THRESHOLD:
         stores = set(intent.get("stores") or ALL_STORE_KEYS)
@@ -146,7 +145,6 @@ def retrieve(
     store_queries = {
         "vector": _query_vector_store,
         "clause": _query_clause_store,
-        "research": _query_document_store,
         "table": _query_table_store,
     }
 
@@ -374,13 +372,9 @@ def graph_expanded_chunks(
 
 
 # Neo4j Chunk.store holds the Postgres table name (graph_build_service writes
-# "vector_store" | "clause_store" | "document_store"); RetrievedChunk.store_type
-# uses the short keys. table_store is included defensively — the graph builder
-# never writes it today, but a future build pass might.
 _GRAPH_STORE_TO_STORE_TYPE = {
     "vector_store": "vector",
     "clause_store": "clause",
-    "document_store": "research",
     "table_store": "table",
 }
 
@@ -515,33 +509,6 @@ def _fetch_chunks_by_ids(conn, store: str, pg_ids: list, document_types, documen
                 document_filename=r[6], document_type=r[7],
                 pdf_storage_path=r[8], pdf_bucket=r[9],
                 store_type="clause",
-            )
-            for r in rows
-        ]
-
-    if store == "document_store":
-        sql = f"""
-            SELECT
-                ds.id::text, ds.document_id::text, ds.chunk_text,
-                ds.page_number, ds.chunk_type, ds.section_title, ds.source_doi,
-                dr.original_filename, dr.document_type,
-                dr.storage_path, dr.storage_bucket
-            FROM multi_store_rag_working.document_store ds
-            JOIN multi_store_rag_working.document_registry dr ON dr.id = ds.document_id
-            WHERE dr.status = 'completed' AND ds.id = ANY(%s::uuid[])
-            {type_sql} {doc_sql}
-        """
-        with conn.cursor() as cur:
-            cur.execute(sql, [pg_ids] + type_params + doc_params)
-            rows = cur.fetchall()
-        return [
-            RetrievedChunk(
-                chunk_id=r[0], document_id=r[1], text=r[2],
-                page_number=r[3], chunk_type=r[4], section_title=r[5], source_doi=r[6],
-                distance=0.5,
-                document_filename=r[7], document_type=r[8],
-                pdf_storage_path=r[9], pdf_bucket=r[10],
-                store_type="research",
             )
             for r in rows
         ]
@@ -754,44 +721,6 @@ def _query_clause_store(conn, embedding: np.ndarray, document_types, document_id
             document_filename=r[7], document_type=r[8],
             pdf_storage_path=r[9], pdf_bucket=r[10],
             store_type="clause",
-        )
-        for r in rows
-    ]
-
-
-def _query_document_store(conn, embedding: np.ndarray, document_types, document_id, top_k: int) -> list:
-    type_sql, type_params = _type_filter(document_types)
-    doc_sql, doc_params = _doc_filter(document_id, "ds")
-    emb = _emb_str(embedding)
-
-    sql = f"""
-        SELECT
-            ds.id::text, ds.document_id::text, ds.chunk_text,
-            ds.page_number, ds.chunk_type, ds.section_title, ds.source_doi,
-            (ds.embedding <=> %s::vector) AS distance,
-            dr.original_filename, dr.document_type,
-            dr.storage_path, dr.storage_bucket
-        FROM multi_store_rag_working.document_store ds
-        JOIN multi_store_rag_working.document_registry dr ON dr.id = ds.document_id
-        WHERE dr.status = 'completed'
-        {type_sql} {doc_sql}
-        ORDER BY ds.embedding <=> %s::vector
-        LIMIT %s
-    """
-    params = [emb] + type_params + doc_params + [emb, top_k]
-
-    with conn.cursor() as cur:
-        cur.execute(sql, params)
-        rows = cur.fetchall()
-
-    return [
-        RetrievedChunk(
-            chunk_id=r[0], document_id=r[1], text=r[2],
-            page_number=r[3], chunk_type=r[4], section_title=r[5], source_doi=r[6],
-            distance=float(r[7]),
-            document_filename=r[8], document_type=r[9],
-            pdf_storage_path=r[10], pdf_bucket=r[11],
-            store_type="research",
         )
         for r in rows
     ]

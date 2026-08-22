@@ -21,12 +21,30 @@ import {
 } from "@/hooks/useDocuments";
 import { cn, formatDate } from "@/lib/utils";
 import type { PipelineRunSummary, PipelineSource } from "@/lib/types";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 export default function PipelinesPage() {
   const { data: runs, isFetching, refetch } = usePipelines({ limit: 50 });
-  const { mutate: deleteRun } = useDeletePipeline();
+  const { mutate: deleteRun, isPending: isDeletingRun } = useDeletePipeline();
   const { mutate: renameRun } = useRenamePipeline();
   const { mutate: clearAll, isPending: clearingAll } = useClearAllPipelines();
+
+  const [clearAllOpen, setClearAllOpen] = useState(false);
+  const [deleteRunTarget, setDeleteRunTarget] = useState<{ id: string; name: string } | null>(null);
+
+  const handleConfirmClearAll = () => {
+    clearAll(undefined, {
+      onSettled: () => setClearAllOpen(false),
+    });
+  };
+
+  const handleConfirmDeleteRun = () => {
+    if (deleteRunTarget) {
+      deleteRun(deleteRunTarget.id, {
+        onSettled: () => setDeleteRunTarget(null),
+      });
+    }
+  };
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -57,11 +75,7 @@ export default function PipelinesPage() {
             {(runs?.total ?? 0) > 0 && (
               <button
                 type="button"
-                onClick={() => {
-                  if (confirm("Clear all pipeline history? Documents and their chunks will be kept.")) {
-                    clearAll();
-                  }
-                }}
+                onClick={() => setClearAllOpen(true)}
                 disabled={clearingAll}
                 className="flex items-center gap-1.5 rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 disabled:opacity-50 transition-all"
               >
@@ -96,7 +110,12 @@ export default function PipelinesPage() {
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
               {(runs?.items ?? []).map((r) => (
-                <RunRow key={r.id} run={r} onDelete={deleteRun} onRename={renameRun} />
+                <RunRow
+                  key={r.id}
+                  run={r}
+                  onDelete={(id, name) => setDeleteRunTarget({ id, name })}
+                  onRename={renameRun}
+                />
               ))}
               {runs && runs.items.length === 0 && (
                 <tr>
@@ -112,6 +131,40 @@ export default function PipelinesPage() {
           </table>
         </div>
       </div>
+
+      {/* ── Clear All History Dialog ─────────────────────────────── */}
+      <ConfirmDialog
+        isOpen={clearAllOpen}
+        onClose={() => setClearAllOpen(false)}
+        onConfirm={handleConfirmClearAll}
+        title="Clear All Pipeline History"
+        description="Are you sure you want to clear all pipeline execution logs? Uploaded documents and their multi-store records will remain intact."
+        confirmText="Clear History"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={clearingAll}
+      />
+
+      {/* ── Delete Single Run Dialog ─────────────────────────────── */}
+      <ConfirmDialog
+        isOpen={!!deleteRunTarget}
+        onClose={() => setDeleteRunTarget(null)}
+        onConfirm={handleConfirmDeleteRun}
+        title="Delete Pipeline Run"
+        description={
+          <span>
+            Are you sure you want to delete the execution history for{" "}
+            <strong className="font-semibold text-slate-900 dark:text-white">
+              &ldquo;{deleteRunTarget?.name}&rdquo;
+            </strong>
+            ? Documents and stored records will be kept.
+          </span>
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isDeletingRun}
+      />
     </div>
   );
 }
@@ -128,7 +181,7 @@ function RunRow({
   onRename,
 }: {
   run: PipelineRunSummary;
-  onDelete: (id: string) => void;
+  onDelete: (id: string, name: string) => void;
   onRename: (args: { runId: string; name: string }) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -235,11 +288,7 @@ function RunRow({
       <td className="px-6 py-4 text-right">
         <button
           type="button"
-          onClick={() => {
-            if (confirm(`Delete pipeline history for "${run.name}"? Documents will be kept.`)) {
-              onDelete(run.id);
-            }
-          }}
+          onClick={() => onDelete(run.id, run.name)}
           className="text-slate-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 transition-colors p-1"
           title="Delete pipeline run"
         >

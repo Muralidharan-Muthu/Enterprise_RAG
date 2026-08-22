@@ -148,11 +148,11 @@ def test_local_search_honors_explicit_hops_override():
 def test_graphrag_local_chunks_defaults_hops_to_none():
     # None → local_search resolves GRAPHRAG_LOCAL_HOPS (multi-hop by config).
     with patch("app.services.graphrag_retriever.local_search", return_value=[]) as ls:
-        rs.graphrag_local_chunks("q", ["research"])
+        rs.graphrag_local_chunks("q", ["financial"])
     assert ls.call_args.kwargs.get("hops") is None
 
 
 def test_graphrag_local_chunks_threads_explicit_hops():
     with patch("app.services.graphrag_retriever.local_search", return_value=[]) as ls:
-        rs.graphrag_local_chunks("q", ["research"], hops=3)
+        rs.graphrag_local_chunks("q", ["financial"], hops=3)
     assert ls.call_args.kwargs.get("hops") == 3

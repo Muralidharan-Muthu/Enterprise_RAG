@@ -80,22 +80,7 @@ def _extract_first_json_object(text: str) -> dict:
 
 
 def _canonical_store(raw: str) -> str:
-    """Map VLM free-text store name to a canonical snake_case store identifier.
-
-    Checks are ordered to be unambiguous:
-
-    1. ``table``                          → table_store
-    2. ``clause``                         → clause_store
-    3. ``document`` | ``research``        → document_store
-       | ``paper`` | ``citation``
-       | ``scientific``
-    4. ``normal`` | ``chunk`` | ``text``  → vector_store
-       | ``vector``
-    5. ``image`` or anything else         → image_store
-
-    The ordering ensures that e.g. "Document Store" does not accidentally
-    match the ``text``/``chunk`` branch that would route it to vector_store.
-    """
+    """Map VLM free-text store name to a canonical snake_case store identifier."""
     lower = raw.lower()
     if "table" in lower:
         return "table_store"
@@ -103,14 +88,7 @@ def _canonical_store(raw: str) -> str:
         return "clause_store"
     if (
         "document" in lower
-        or "research" in lower
-        or "paper" in lower
-        or "citation" in lower
-        or "scientific" in lower
-    ):
-        return "document_store"
-    if (
-        "normal" in lower
+        or "normal" in lower
         or "chunk" in lower
         or "text" in lower
         or "vector" in lower
@@ -122,16 +100,11 @@ def _canonical_store(raw: str) -> str:
 
 
 def _content_type_from_store(store: str) -> str:
-    """Derive a content_type string from a canonical store name.
-
-    document_store images contain extracted text/research passages and are
-    therefore typed as "text" (the embedding is derived from chunk_text).
-    """
+    """Derive a content_type string from a canonical store name."""
     mapping = {
         "table_store": "table",
         "vector_store": "text",
         "clause_store": "text",
-        "document_store": "text",
         "image_store": "figure",
     }
     return mapping.get(store, "figure")
@@ -178,12 +151,11 @@ def _build_prompt() -> str:
         "original image again.\n"
         "After understanding the content, determine the single most appropriate destination store.\n"
         "Possible stores include: Normal Chunk Store, Table Store, Clause Store, "
-        "Document Store, Image Store.\n"
+        "Image Store.\n"
         "The destination should be selected based on the extracted content, not merely the image type.\n"
         "- Normal Chunk Store: general policy/procedural text, paragraphs, prose.\n"
         "- Table Store: structured tabular data with rows and columns.\n"
         "- Clause Store: legal clauses, contractual obligations, terms.\n"
-        "- Document Store: research passages, academic content, citations, scientific text.\n"
         "- Image Store: pure figures, diagrams, charts, illustrations with no dominant text.\n"
     )
 
@@ -195,7 +167,7 @@ def _build_prompt() -> str:
         '{"detected_store": "...", "structured_content": {...}, "ocr_text": "...", '
         '"confidence": 0.0, "reason_for_store_selection": "..."}\n'
         'detected_store = one of exactly: "Normal Chunk Store", "Table Store", "Clause Store", '
-        '"Document Store", "Image Store".\n'
+        '"Image Store".\n'
         "structured_content = a JSON *object* (not a string, not prose) whose shape matches the "
         "schema for the chosen detected_store as listed above. The object must be fully populated "
         "with every key the destination store expects. Do NOT produce a plain-text string here — "

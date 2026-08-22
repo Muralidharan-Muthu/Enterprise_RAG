@@ -39,12 +39,134 @@ logger = logging.getLogger(__name__)
 
 # ── Legal clause boundary patterns ───────────────────────────────────────────
 CLAUSE_PATTERNS = [
-    r"^\d+(\.\d+)*\s+[A-Z]",
-    r"^(Article|Section|Clause|Schedule|Annexure|Exhibit)\s+\w",
-    r"^[IVXLC]+\.\s+[A-Z]",
-    r"^[A-Z][A-Z ]{3,}$",
+    r"^\d+(\.\d+)*\.?\s+[A-Z]",                                                         # 1. TERMINATION, 1.1 CLAUSE, 1 TERMINATION
+    r"^(Article|Section|Clause|Schedule|Annexure|Exhibit|Provision|Term)\s+[\w\d\.]+",  # Article 4, Section 2.1
+    r"^[IVXLCDM]+[\.\)]\s+[A-Z]",                                                       # I. TITLE, IV. DISPUTE
+    r"^\([a-zA-Z0-9]+\)\s+[A-Z]",                                                       # (a) TERMINATION, (1) NOTICE
+    r"^[A-Z0-9\s\-_–—:]{4,80}$",                                                        # ALL-CAPS HEADERS
 ]
 CLAUSE_RE = re.compile("|".join(CLAUSE_PATTERNS), re.MULTILINE)
+
+_LEGAL_KEYWORDS_MAP: dict[str, list[str]] = {
+    "termination": ["termination", "terminate", "notice provision", "for cause", "without cause", "exit option", "cancellation"],
+    "dispute_resolution": ["dispute resolution", "arbitration", "jurisdiction", "exclusive jurisdiction", "conciliation act", "litigation", "governing law", "choice of law", "court of law", "arbitrator"],
+    "liability": ["limitation of liability", "liability", "consequential damages", "indirect damages", "cap on liability", "indemnification", "indemnity", "hold harmless"],
+    "confidentiality": ["confidentiality", "confidential information", "non-disclosure", "proprietary information", "trade secret"],
+    "warranty": ["warranty", "warranties", "representation and warranty", "merchantability", "as is"],
+    "obligation": ["covenant", "obligations", "compliance with laws", "code of conduct", "statutory obligation"],
+    "force_majeure": ["force majeure", "act of god", "unforeseen event"],
+    "general": ["contractual clause", "legal framework", "agreement", "severability", "entire agreement", "amendment", "waiver", "assignment"],
+}
+
+
+def detect_clause_nature(
+    text: str,
+    section_title: Optional[str] = None,
+    block_types: Optional[list[str]] = None,
+) -> tuple[bool, Optional[str], Optional[str], str]:
+    """
+    Detect if text or a chunk represents a legal clause/contractual term.
+    Returns: (is_clause, clause_number, clause_title, clause_type)
+    """
+    text_clean = text.strip()
+    if text_clean.startswith("Context:"):
+        parts = text_clean.split("\n\n", 1)
+        if len(parts) > 1:
+            text_clean = parts[1].strip()
+
+    first_line = text_clean.split("\n")[0].strip()
+    low_text = text_clean.lower()
+    low_title = (section_title or "").lower()
+
+    # 1. Match numbering or title prefix (e.g. '1. TERMINATION FOR CAUSE (IMMEDIATE ACTION)')
+    c_num = None
+    c_title = None
+
+    m_num = re.match(r"^(\d+(\.\d+)*\.?|[IVXLCDM]+[\.\)]|\([a-zA-Z0-9]+\))\s+(.*)", first_line)
+    if m_num:
+        c_num = m_num.group(1).rstrip(".")
+        c_title = m_num.group(3).split("\n")[0].strip()
+        if len(c_title) > 80:
+            c_title = c_title[:80].rsplit(" ", 1)[0]
+    elif re.match(r"^(Article|Section|Clause|Schedule|Annexure|Exhibit|Provision)\s+[\w\d\.]+", first_line, re.IGNORECASE):
+        c_title = first_line[:80]
+        c_num = first_line.split()[1] if len(first_line.split()) > 1 else None
+
+    # 2. Check section title for contractual keywords
+    is_legal_section = any(k in low_title for k in [
+        "contractual clause", "legal framework", "terms and condition",
+        "governing law", "jurisdiction", "termination", "dispute resolution",
+        "legal", "contract", "covenant", "warranty", "liability"
+    ])
+
+    # 3. Detect clause type from keywords
+    matched_type = None
+    for ctype, kws in _LEGAL_KEYWORDS_MAP.items():
+        if any(kw in low_text or kw in low_title for kw in kws):
+            matched_type = ctype
+            break
+
+    # Decision criteria:
+    # A) Has clause numbering/heading + matched legal/contract keyword
+    if (c_num or is_legal_section or CLAUSE_RE.match(first_line)) and matched_type:
+        return True, c_num, c_title or section_title, matched_type
+
+    # B) Section title explicitly says 'contractual clause' / 'legal framework'
+    if is_legal_section and len(text_clean.split()) >= 10:
+        return True, c_num, c_title or section_title, matched_type or "general"
+
+    # C) Strong contract terms (termination rights, exclusive jurisdiction, binding arbitration)
+    if any(phrase in low_text for phrase in [
+        "unilateral, immediate termination", "termination without cause", "termination for cause",
+        "exclusive jurisdiction", "binding dispute resolution", "arbitration and conciliation act",
+        "shall indemnify and hold harmless", "limitation of liability", "governed by the laws of"
+    ]):
+        return True, c_num, c_title or section_title, matched_type or "general"
+
+    return False, None, None, "general"
+
+
+def convert_chunk_to_legal_clause(chunk: Chunk, clause_index: int) -> LegalClause:
+    """Convert a chunk classified as legal_clause into a structured LegalClause object."""
+    meta = chunk.chunk_metadata or {}
+    core_text = chunk.chunk_text
+    if core_text.startswith("Context:"):
+        parts = core_text.split("\n\n", 1)
+        if len(parts) > 1:
+            core_text = parts[1].strip()
+
+    c_num = meta.get("clause_number")
+    c_title = meta.get("clause_title") or chunk.section_title
+    c_type = meta.get("clause_type") or "general"
+
+    if not c_num or not c_title or c_type == "general":
+        _, h_num, h_title, h_type = detect_clause_nature(core_text, chunk.section_title)
+        c_num = c_num or h_num
+        c_title = c_title or h_title
+        if c_type == "general" and h_type != "general":
+            c_type = h_type
+
+    return LegalClause(
+        clause_index=clause_index,
+        clause_text=core_text,
+        clause_number=str(c_num) if c_num else f"{clause_index + 1}",
+        clause_title=str(c_title) if c_title else f"Clause {clause_index + 1}",
+        clause_type=c_type if c_type in (
+            "obligation", "prohibition", "right", "definition", "liability",
+            "indemnification", "termination", "confidentiality", "dispute_resolution",
+            "force_majeure", "warranty", "penalty", "governing_law", "general"
+        ) else "general",
+        risk_level=meta.get("risk_level"),
+        risk_rationale=meta.get("risk_rationale"),
+        obligor=meta.get("obligor"),
+        obligee=meta.get("obligee"),
+        parties_mentioned=meta.get("parties_mentioned") or [],
+        key_dates=meta.get("key_dates") or {},
+        monetary_values=meta.get("monetary_values") or [],
+        page_number=chunk.page_number,
+        page_numbers=chunk.page_numbers or ([chunk.page_number] if chunk.page_number else []),
+        section_path=meta.get("section_path") or ([chunk.section_title] if chunk.section_title else []),
+    )
 
 # ── Sentence splitter ─────────────────────────────────────────────────────────
 _SENT_END = re.compile(r'(?<=[.!?])(?:\s+|$)')
@@ -272,9 +394,26 @@ def _chunk_semantic_breakpoint(logical_units: list[_LogicalUnit]) -> list[Chunk]
             "image_analysis" if rc.is_image_analysis else
             ("list" if "list" in rc.block_types else "paragraph")
         )
+
+        # Detect if this chunk is a legal clause even if LLM returned generic paragraph
+        is_clause, h_cnum, h_ctitle, h_ctype = detect_clause_nature(
+            core_text, section_title, rc.block_types
+        )
+        if is_clause and not rc.is_image_analysis:
+            semantic_type = "legal_clause"
+
         # Override semantic_type for image_analysis blocks regardless of Gemma
         if rc.is_image_analysis:
             semantic_type = "image_analysis"
+
+        clause_number = enrichment.get("clause_number") or h_cnum
+        clause_title = enrichment.get("clause_title") or h_ctitle or section_title
+        clause_type = enrichment.get("clause_type") or h_ctype or "general"
+        risk_level = enrichment.get("risk_level")
+        risk_rationale = enrichment.get("risk_rationale")
+        parties_mentioned = enrichment.get("parties_mentioned") or []
+        obligor = enrichment.get("obligor")
+        obligee = enrichment.get("obligee")
 
         chunks.append(Chunk(
             chunk_index=idx,
@@ -292,6 +431,14 @@ def _chunk_semantic_breakpoint(logical_units: list[_LogicalUnit]) -> list[Chunk]
                 "has_image_content": rc.is_image_analysis,
                 "overlap_applied": False,   # semantic path has no overlap
                 "enriched_by_groq": bool(enrichment.get("section_title")),
+                "clause_number": clause_number,
+                "clause_title": clause_title,
+                "clause_type": clause_type,
+                "risk_level": risk_level,
+                "risk_rationale": risk_rationale,
+                "parties_mentioned": parties_mentioned,
+                "obligor": obligor,
+                "obligee": obligee,
             },
         ))
 

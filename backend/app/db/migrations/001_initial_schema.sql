@@ -344,7 +344,6 @@ SELECT
     COALESCE(vs.n, 0)  AS vector_chunks,
     COALESCE(ts.n, 0)  AS table_count,
     COALESCE(cs.n, 0)  AS clause_count,
-    COALESCE(ds.n, 0)  AS research_chunks,
     d.completed_at,
     d.created_at,
     d.error_message
@@ -363,12 +362,7 @@ LEFT JOIN (
     SELECT document_id, COUNT(*) AS n
     FROM multi_store_rag_working.clause_store
     GROUP BY document_id
-) cs ON cs.document_id = d.id
-LEFT JOIN (
-    SELECT document_id, COUNT(*) AS n
-    FROM multi_store_rag_working.document_store
-    GROUP BY document_id
-) ds ON ds.document_id = d.id;
+) cs ON cs.document_id = d.id;
 
 -- ============================================================
 -- Verification queries — run after schema is applied

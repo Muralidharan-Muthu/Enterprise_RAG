@@ -59,44 +59,24 @@ class TestCanonicalStoreDocumentSynonyms:
     """_canonical_store maps all document-store synonyms to document_store."""
 
     def test_document_store_literal(self):
-        assert ias._canonical_store("Document Store") == "document_store"
+        assert ias._canonical_store("Document Store") == "vector_store"
 
     def test_document_lowercase(self):
-        assert ias._canonical_store("document") == "document_store"
+        assert ias._canonical_store("document") == "vector_store"
 
     def test_document_snake(self):
-        assert ias._canonical_store("document_store") == "document_store"
-
-    def test_research(self):
-        assert ias._canonical_store("Research Store") == "document_store"
-
-    def test_paper(self):
-        assert ias._canonical_store("Paper Store") == "document_store"
-
-    def test_citation(self):
-        assert ias._canonical_store("Citation Store") == "document_store"
-
-    def test_scientific(self):
-        assert ias._canonical_store("Scientific Document Store") == "document_store"
+        assert ias._canonical_store("document_store") == "vector_store"
 
     def test_upper(self):
-        assert ias._canonical_store("DOCUMENT STORE") == "document_store"
+        assert ias._canonical_store("DOCUMENT STORE") == "vector_store"
 
 
 class TestCanonicalStoreOrdering:
-    """Ordering: table > clause > document > vector > image.
-
-    'Document Store' must NOT fall through to vector_store even though it
-    does not contain 'text'/'chunk'/'normal' — the document branch fires first.
-    """
+    """Ordering: table > clause > vector > image."""
 
     def test_table_wins_over_clause(self):
         # edge case: both 'table' and 'clause' in raw → table_store wins
         assert ias._canonical_store("Table Clause Store") == "table_store"
-
-    def test_document_wins_over_vector(self):
-        # 'research' before 'text' — document_store must win
-        assert ias._canonical_store("research text") == "document_store"
 
     def test_plain_text_still_vector(self):
         assert ias._canonical_store("Normal Chunk Store") == "vector_store"
@@ -283,13 +263,13 @@ class TestAnalyzeImageDocumentStore:
             "reason_for_store_selection": "Academic research passage with citation",
         })
 
-    def test_detected_store_is_document_store(self):
+    def test_detected_store_is_vector_store(self):
         client = MagicMock()
         client.__enter__.return_value.post.return_value = _Groq_response(self._vlm_payload())
         with patch.object(ias, "httpx", **{"Client.return_value": client}):
             with _settings_ctx():
                 out = ias.analyze_image(b"\x89PNG", "")
-        assert out["detected_store"] == "document_store"
+        assert out["detected_store"] == "vector_store"
 
     def test_content_type_is_text(self):
         client = MagicMock()

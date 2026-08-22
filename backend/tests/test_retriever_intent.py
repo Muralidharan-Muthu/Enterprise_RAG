@@ -12,10 +12,9 @@ def test_select_stores_explicit_doc_types_override():
 def test_select_stores_from_intent():
     # A confident intent narrows to its store set. image_store is not a searchable
     # store (migration 008) — visual content routes to table/vector instead.
-    flags = _select_stores(None, use_intent=True,
-                           intent={"stores": ["table"], "confidence": 0.9})
+    flags = _select_stores(None, use_intent=True, intent={"stores": ["table"], "confidence": 0.9})
     assert flags["table"] is True
-    assert flags["vector"] is False and flags["clause"] is False and flags["research"] is False
+    assert flags["vector"] is False and flags["clause"] is False
     assert "image" not in flags
 
 

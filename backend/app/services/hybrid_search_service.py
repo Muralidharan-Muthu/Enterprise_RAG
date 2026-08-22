@@ -126,46 +126,6 @@ def _kw_clause_store(conn, query: str, document_types, document_id, top_k: int) 
     ]
 
 
-def _kw_document_store(conn, query: str, document_types, document_id, top_k: int) -> list:
-    type_sql, type_params = _type_filter(document_types)
-    doc_sql, doc_params = _doc_filter(document_id, "ds")
-
-    sql = f"""
-        SELECT
-            ds.id::text, ds.document_id::text, ds.chunk_text,
-            ds.page_number, ds.chunk_type, ds.section_title, ds.source_doi,
-            ts_rank_cd(ds.chunk_text_tsv, query) AS rank,
-            dr.original_filename, dr.document_type,
-            dr.storage_path, dr.storage_bucket
-        FROM multi_store_rag_working.document_store ds
-        JOIN multi_store_rag_working.document_registry dr ON dr.id = ds.document_id,
-        websearch_to_tsquery('english', %s) query
-        WHERE dr.status = 'completed'
-          AND ds.chunk_text_tsv @@ query
-        {type_sql} {doc_sql}
-        ORDER BY rank DESC
-        LIMIT %s
-    """
-    params = [query] + type_params + doc_params + [top_k]
-
-    with conn.cursor() as cur:
-        cur.execute(sql, params)
-        rows = cur.fetchall()
-
-    max_rank = max((float(r[7]) for r in rows), default=1.0) or 1.0
-    return [
-        RetrievedChunk(
-            chunk_id=r[0], document_id=r[1], text=r[2],
-            page_number=r[3], chunk_type=r[4], section_title=r[5], source_doi=r[6],
-            distance=1.0 - (float(r[7]) / max_rank),
-            document_filename=r[8], document_type=r[9],
-            pdf_storage_path=r[10], pdf_bucket=r[11],
-            store_type="research",
-        )
-        for r in rows
-    ]
-
-
 def _kw_table_store(conn, query: str, document_types, document_id, top_k: int) -> list:
     type_sql, type_params = _type_filter(document_types)
     doc_sql, doc_params = _doc_filter(document_id, "ts")
@@ -207,12 +167,9 @@ def _kw_table_store(conn, query: str, document_types, document_id, top_k: int) -
     ]
 
 
-# image_store is semantic-only for v1 — no keyword search function.
-
 _KW_STORE_FNS = {
     "vector": _kw_vector_store,
     "clause": _kw_clause_store,
-    "research": _kw_document_store,
     "table": _kw_table_store,
 }
 
