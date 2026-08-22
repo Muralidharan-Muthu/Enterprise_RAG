@@ -241,6 +241,17 @@ def _resolve_do_ocr(path: Optional[Path]) -> bool:
     return bool(settings.DOCLING_DO_OCR)
 
 
+def _resolve_local_artifacts_path() -> Optional[Path]:
+    for candidate in [
+        Path(__file__).resolve().parent.parent.parent / "docling_models",
+        Path.cwd() / "docling_models",
+        Path("/app/docling_models"),
+    ]:
+        if candidate.exists() and any(candidate.iterdir()):
+            return candidate
+    return None
+
+
 def _make_converter(do_ocr: Optional[bool] = None):
     """Build a Docling converter from settings. Models load once and the
     converter is reused across page chunks (no per-chunk 1.3 GB reload).
@@ -250,9 +261,7 @@ def _make_converter(do_ocr: Optional[bool] = None):
     from docling.datamodel.base_models import InputFormat
     from docling.datamodel.pipeline_options import PdfPipelineOptions
 
-    artifacts_dir = Path(__file__).resolve().parent.parent.parent / "docling_models"
-    # Only use artifacts_path if it exists and contains actual model weights
-    local_artifacts = artifacts_dir if (artifacts_dir.exists() and any(artifacts_dir.iterdir())) else None
+    local_artifacts = _resolve_local_artifacts_path()
 
     from app.config import settings
     pipeline_options = PdfPipelineOptions(
@@ -275,8 +284,7 @@ def _make_converter_multi():
     from docling.datamodel.base_models import InputFormat
     from docling.datamodel.pipeline_options import PdfPipelineOptions
 
-    artifacts_dir = Path(__file__).resolve().parent.parent.parent / "docling_models"
-    local_artifacts = artifacts_dir if (artifacts_dir.exists() and any(artifacts_dir.iterdir())) else None
+    local_artifacts = _resolve_local_artifacts_path()
 
     from app.config import settings
     pipeline_options = PdfPipelineOptions(
