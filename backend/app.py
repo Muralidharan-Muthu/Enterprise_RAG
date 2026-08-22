@@ -3,7 +3,12 @@ import threading
 from pathlib import Path
 import gradio as gr
 import spaces
-from app.main import app as fastapi_app
+from starlette.routing import Mount
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.config import settings
+from app.api.routes import health, ingestion, documents, query, chats, graph as graph_routes, auth as auth_routes
 
 
 @spaces.GPU
@@ -40,6 +45,7 @@ def check_api_health(msg: str) -> str:
     return f"⚡ Enterprise RAG API is Healthy, Online & Operational! (Message: '{msg or 'ping'}')"
 
 
+# ── Build the Gradio UI ──────────────────────────────────────────────────
 with gr.Blocks(title="Enterprise RAG Backend API") as demo:
     gr.Markdown("# 🚀 Enterprise RAG Backend API")
     gr.Markdown("""
@@ -58,9 +64,57 @@ with gr.Blocks(title="Enterprise RAG Backend API") as demo:
     btn_fast.click(fn=check_api_health, inputs=inp, outputs=out, queue=False)
     btn_gpu.click(fn=zerogpu_handler, inputs=inp, outputs=out)
 
-# Mount all FastAPI routes and lifespan onto Gradio's internal FastAPI application
-demo.app.include_router(fastapi_app.router)
-demo.app.router.lifespan_context = fastapi_app.router.lifespan_context
+
+# ── Mount FastAPI as ASGI sub-application under /api ─────────────────────
+#
+# Gradio's SSR catches ALL unmatched routes and returns HTML. By mounting
+# our FastAPI app at "/api" via Starlette Mount(), requests to /api/* are
+# routed to FastAPI BEFORE Gradio's catch-all sees them.
+#
+# The mount strips the "/api" prefix before passing to FastAPI, so FastAPI
+# routes are registered WITHOUT the /api prefix (e.g. /v1/health, /docs).
+from app.main import lifespan
+from app.core.logging import setup_logging
+from app.core.tracing import setup_tracing
+
+setup_logging()
+
+api_app = FastAPI(
+    title="Enterprise RAG API",
+    description="Enterprise Agentic RAG — Ingestion & multi-store document intelligence platform",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan,
+)
+
+setup_tracing(api_app)
+
+api_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+api_app.include_router(health.router, prefix="/v1")
+api_app.include_router(ingestion.router, prefix="/v1/ingest", tags=["ingestion"])
+api_app.include_router(documents.router, prefix="/v1/documents", tags=["documents"])
+api_app.include_router(query.router, prefix="/v1", tags=["query"])
+api_app.include_router(chats.router, prefix="/v1/chats", tags=["chats"])
+api_app.include_router(graph_routes.router, prefix="/v1/graph", tags=["graph"])
+api_app.include_router(auth_routes.router, prefix="/v1/auth", tags=["auth"])
+
+
+@api_app.get("/", include_in_schema=False)
+def api_root():
+    return {"service": "Enterprise RAG API", "version": "1.0.0", "docs": "/api/docs"}
+
+
+# Insert FastAPI mount BEFORE Gradio's catch-all SSR routes
+demo.app.routes.insert(0, Mount("/api", app=api_app))
+
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 7860))
