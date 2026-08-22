@@ -3,12 +3,8 @@ import threading
 from pathlib import Path
 import gradio as gr
 import spaces
-from starlette.routing import Mount
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from app.config import settings
-from app.api.routes import health, ingestion, documents, query, chats, graph as graph_routes, auth as auth_routes
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 
 @spaces.GPU
@@ -65,17 +61,14 @@ with gr.Blocks(title="Enterprise RAG Backend API") as demo:
     btn_gpu.click(fn=zerogpu_handler, inputs=inp, outputs=out)
 
 
-# ── Mount FastAPI as ASGI sub-application under /api ─────────────────────
-#
-# Gradio's SSR catches ALL unmatched routes and returns HTML. By mounting
-# our FastAPI app at "/api" via Starlette Mount(), requests to /api/* are
-# routed to FastAPI BEFORE Gradio's catch-all sees them.
-#
-# The mount strips the "/api" prefix before passing to FastAPI, so FastAPI
-# routes are registered WITHOUT the /api prefix (e.g. /v1/health, /docs).
-from app.main import lifespan
+# ── Build the FastAPI sub-app for /api/* routes ──────────────────────────
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.config import settings
 from app.core.logging import setup_logging
 from app.core.tracing import setup_tracing
+from app.main import lifespan
+from app.api.routes import health, ingestion, documents, query, chats, graph as graph_routes, auth as auth_routes
 
 setup_logging()
 
@@ -112,8 +105,39 @@ def api_root():
     return {"service": "Enterprise RAG API", "version": "1.0.0", "docs": "/api/docs"}
 
 
-# Insert FastAPI mount BEFORE Gradio's catch-all SSR routes
-demo.app.routes.insert(0, Mount("/api", app=api_app))
+# ── ASGI Middleware to intercept /api/* before Gradio's SSR ──────────────
+#
+# Gradio's SSR uses a SvelteKit Node.js server that catches ALL routes
+# including /api/*. No amount of Starlette route insertion helps because
+# the SSR middleware runs before route matching.
+#
+# This ASGI middleware wraps Gradio's entire ASGI app: if the path starts
+# with /api, it strips the prefix and delegates to our FastAPI app.
+# Everything else passes through to Gradio unchanged.
+
+class ApiRoutingMiddleware:
+    """ASGI middleware that routes /api/* to FastAPI, everything else to Gradio."""
+    
+    def __init__(self, gradio_asgi: ASGIApp, fastapi_asgi: ASGIApp):
+        self.gradio = gradio_asgi
+        self.fastapi = fastapi_asgi
+    
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] in ("http", "websocket"):
+            path = scope.get("path", "")
+            if path.startswith("/api"):
+                # Strip /api prefix so FastAPI sees /v1/health, /docs, etc.
+                scope = dict(scope)
+                scope["path"] = path[4:] or "/"
+                scope["raw_path"] = (path[4:] or "/").encode()
+                await self.fastapi(scope, receive, send)
+                return
+        await self.gradio(scope, receive, send)
+
+
+# Wrap Gradio's internal ASGI app with our routing middleware
+_original_asgi = demo.app
+demo.app = ApiRoutingMiddleware(_original_asgi, api_app)  # type: ignore[assignment]
 
 
 if __name__ == "__main__":
