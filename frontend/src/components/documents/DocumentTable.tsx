@@ -146,7 +146,7 @@ export function DocumentTable({ documents }: Props) {
 
                   {/* Chunk Count */}
                   <td className="px-6 py-4 font-mono text-slate-700 dark:text-gray-300 text-xs">
-                    {doc.chunk_count?.toLocaleString() ?? "—"}
+                    {(doc.chunk_count ?? doc.vector_chunks)?.toLocaleString() ?? "—"}
                   </td>
 
                   {/* Page Count */}

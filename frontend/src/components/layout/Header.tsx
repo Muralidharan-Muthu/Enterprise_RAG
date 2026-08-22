@@ -57,11 +57,11 @@ export function Header() {
             <span className="text-slate-300 dark:text-zinc-700 text-xs">•</span>
             <HealthPill
               label="Groq"
-              status={health.groq_endpoint || health.groq_endpoint}
+              status={health.groq_endpoint ?? "unknown"}
               icon={Cpu}
             />
             <span className="text-slate-300 dark:text-zinc-700 text-xs">•</span>
-            <HealthPill label="Neo4j" status={health.neo4j} icon={Network} />
+            <HealthPill label="Neo4j" status={health.neo4j ?? "unknown"} icon={Network} />
           </div>
         ) : isError ? (
           <div className="flex items-center gap-2 px-3 py-1 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-xs text-red-600 dark:text-red-400">
@@ -81,11 +81,11 @@ export function Header() {
 
 function HealthPill({
   label,
-  status,
-  icon: Icon,
+  status = "unknown",
+  icon: _Icon,
 }: {
   label: string;
-  status: string;
+  status?: string;
   icon: any;
 }) {
   const ok = status === "ok";

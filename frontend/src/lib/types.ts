@@ -11,12 +11,15 @@ export interface DocumentSummary {
   status: DocumentStatus;
   page_count: number | null;
   word_count: number | null;
+  file_size_bytes?: number | null;
   router_confidence: number | null;
   doc_title: string | null;
   doc_summary: string | null;
   vector_chunks: number;
   table_count: number;
   clause_count: number;
+  chunk_count?: number | null;
+  total_chunks?: number | null;
   completed_at: string | null;
   created_at: string;
   error_message: string | null;
@@ -222,10 +225,8 @@ export interface HealthResponse {
   database: string;
   redis: string;
   groq_endpoint?: string;
-  groq_endpoint: string;
-  neo4j: string;
+  neo4j?: string;
   timestamp: string;
-  groq_model?: string;
   groq_model?: string;
 }
 
