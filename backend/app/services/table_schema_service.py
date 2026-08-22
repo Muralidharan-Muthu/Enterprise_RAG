@@ -71,21 +71,44 @@ def build_row_objects(headers: list[str], rows: list[list]) -> list[dict]:
     return [r.row_data for r in build_unified_rows(headers, rows)]
 
 
-def build_row_store_rows(document_id: str, table_id: str, headers: list[str], rows: list[list]) -> list[tuple]:
+def build_row_store_rows(
+    document_id: str,
+    table_id: str,
+    headers: list[str],
+    rows: list[list],
+    embeddings: Optional[list | object] = None,
+) -> list[tuple]:
     """DB-ready tuples for table_cell_store.insert_table_rows:
-    (document_id, table_id, row_index, row_data_json, row_numeric_json, row_text)."""
+    (document_id, table_id, row_index, row_data_json, row_numeric_json, row_text[, embedding_str])."""
     unified_rows = build_unified_rows(headers, rows)
-    return [
-        (
-            document_id,
-            table_id,
-            r.row_index,
-            json.dumps(r.row_data, default=str),
-            json.dumps(r.row_numeric),
-            r.row_text,
-        )
-        for r in unified_rows
-    ]
+    out: list[tuple] = []
+    for idx, r in enumerate(unified_rows):
+        emb_str = None
+        if embeddings is not None and idx < len(embeddings):
+            emb_val = embeddings[idx]
+            if emb_val is not None and hasattr(emb_val, "__iter__"):
+                emb_str = f"[{','.join(f'{x:.8f}' for x in emb_val)}]"
+
+        if emb_str is not None:
+            out.append((
+                document_id,
+                table_id,
+                r.row_index,
+                json.dumps(r.row_data, default=str),
+                json.dumps(r.row_numeric),
+                r.row_text,
+                emb_str,
+            ))
+        else:
+            out.append((
+                document_id,
+                table_id,
+                r.row_index,
+                json.dumps(r.row_data, default=str),
+                json.dumps(r.row_numeric),
+                r.row_text,
+            ))
+    return out
 
 
 def build_cell_store_rows(document_id: str, table_id: str, headers: list[str], rows: list[list]) -> list[tuple]:

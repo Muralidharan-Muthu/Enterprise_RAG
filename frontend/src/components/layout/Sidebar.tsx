@@ -66,9 +66,9 @@ export function Sidebar() {
           </div>
           <div className="whitespace-nowrap">
             <div className="flex items-center gap-1.5">
-              <span className="text-sm font-bold tracking-tight text-slate-900 dark:text-zinc-100">Multi-Store RAG</span>
+              <span className="text-sm font-bold tracking-tight text-slate-900 dark:text-zinc-100">Enterprise RAG</span>
             </div>
-            <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">Enterprise Workspace</span>
+            <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">Document Intelligence</span>
           </div>
         </Link>
 
@@ -167,64 +167,35 @@ export function Sidebar() {
       </div>
 
       {/* ── Landing Page Quick Link ──────────────────────────────────── */}
-      <div className="px-3 pt-2">
-        <Link
-          href="/"
-          className={cn(
-            "flex items-center rounded-xl text-xs font-medium text-slate-500 hover:text-indigo-600 hover:bg-slate-100 dark:text-zinc-400 dark:hover:text-indigo-300 dark:hover:bg-white/[0.03] transition-all",
-            collapsed ? "justify-center h-10 w-10 mx-auto px-0" : "px-3.5 py-2 gap-2"
-          )}
-          title={collapsed ? "Landing Page" : undefined}
-        >
-          <ExternalLink className="h-3.5 w-3.5 flex-shrink-0 text-slate-400 dark:text-zinc-500" />
-          {!collapsed && <span>Public Landing Page</span>}
-        </Link>
-      </div>
-
       <div className="flex-1" />
 
-      {/* ── User Profile & Logout Area ──────────────────────────────── */}
+      {/* ── Workspace & Theme Area ──────────────────────────────── */}
       <div className="p-3 border-t border-slate-200/80 dark:border-white/[0.08] bg-slate-50/50 dark:bg-white/[0.01]">
         {!collapsed ? (
           <div className="space-y-2">
             <div className="flex items-center gap-3 p-2 rounded-xl bg-white dark:bg-white/[0.03] border border-slate-200/80 dark:border-white/[0.06] shadow-sm dark:shadow-none">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center text-white font-bold text-xs shadow">
-                {user?.username ? user.username.charAt(0).toUpperCase() : "U"}
+                EA
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-slate-900 dark:text-zinc-100 truncate">
-                  {user?.username || "Logged In User"}
+                  Enterprise Workspace
                 </p>
-                <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">
-                  {user?.email || "user@rag.ai"}
+                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium truncate flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Active Cluster
                 </p>
               </div>
             </div>
 
             <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] text-slate-400 dark:text-zinc-500 font-medium">Appearance</span>
               <ThemeToggle compact={false} />
-              <button
-                type="button"
-                onClick={logout}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
-                title="Log out"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                <span>Logout</span>
-              </button>
             </div>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
             <ThemeToggle compact={true} />
-            <button
-              type="button"
-              onClick={logout}
-              className="w-10 h-10 rounded-xl flex items-center justify-center text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
-              title="Log out"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
           </div>
         )}
       </div>

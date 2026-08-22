@@ -1,13 +1,13 @@
-# Multi-Store RAG — Enterprise Document Intelligence Platform
+# Enterprise RAG — Multi-Store Document Intelligence Platform
 
-**Multi-Store RAG** is a production-grade, agentic document intelligence system that decomposes enterprise PDFs into **five purpose-built specialized datastores** and answers queries with grounded, page-cited responses via a streaming Next.js chat UI.
+**Enterprise RAG** is a production-grade, agentic document intelligence platform that decomposes enterprise PDFs into **five purpose-built specialized datastores** and answers queries with grounded, page-cited responses via a streaming Next.js chat UI.
 
 > Upload a 200-page 10-K annual report. Ask *"What was the EBITDA and YoY revenue growth?"*  
 > The system executes a SQL pushdown query across structured row metrics and returns the exact figure with a table citation — no hallucinations.
 
 ---
 
-## Why Multi-Store RAG?
+## Why Enterprise RAG?
 
 Generic vector databases force every document element — financial tables, legal clauses, org-chart entities, and prose paragraphs — into the same flat embedding index. This causes:
 
@@ -15,7 +15,7 @@ Generic vector databases force every document element — financial tables, lega
 - **Clause misses**: Legal risk clauses buried in dense contract text are semantically similar to benign prose.
 - **Graph blindness**: Subsidiary ownership trees require multi-hop traversal, not nearest-neighbour search.
 
-Multi-Store RAG solves this by routing every document dimension to its optimal store at ingestion time.
+Enterprise RAG solves this by routing every document dimension to its optimal store at ingestion time.
 
 ---
 

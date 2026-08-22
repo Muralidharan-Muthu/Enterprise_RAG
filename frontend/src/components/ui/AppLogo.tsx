@@ -71,10 +71,10 @@ export function AppLogo({ className = "h-8" }: { className?: string }) {
       </div>
       <div className="flex flex-col leading-tight">
         <span className="font-bold text-base tracking-tight text-slate-900 dark:text-white">
-          Multi-Store RAG
+          Enterprise RAG
         </span>
         <span className="text-[10px] font-medium text-indigo-600 dark:text-indigo-400">
-          Document Intelligence
+          Document Intelligence Platform
         </span>
       </div>
     </div>

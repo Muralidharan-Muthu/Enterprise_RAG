@@ -864,26 +864,56 @@ def _query_table_store_parent_only(
     conn, embedding: np.ndarray, document_types, document_id, top_k: int,
     table_filters: Optional["TableFilters"] = None,
 ) -> list:
-    """Original parent-summary ANN search on table_store.embedding.
-
-    Used as:
-    - The primary path when TABLE_CHILD_SEARCH_ENABLED=False.
-    - The fallback branch inside _query_table_store() for tables with 0 children.
-
-    table_filters (Slice 4, optional): same structured prefilter as
-    _query_table_store, applied to `ts` here directly. None/empty => no extra
-    predicates, identical SQL to before Slice 4.
+    """Unified hybrid table search: queries table_row_store (fine-grained row ANN)
+    and table_store (macro summary ANN) and merges them with deduplication.
     """
     type_sql, type_params = _type_filter(document_types)
     doc_sql, doc_params = _doc_filter(document_id, "ts")
     filter_sql, filter_params = _table_filter_sql(table_filters, alias="ts")
     emb = _emb_str(embedding)
 
-    # Universal VLM pipeline: prefer the structured_content embedding (the VLM's
-    # clean, retrieval-ready extraction) when present, falling back to the legacy
-    # table_summary-based embedding so pre-migration rows still match. Both are
-    # 1024-dim BGE vectors in the same space, so a single query embedding compares
-    # against either via COALESCE.
+    chunks: list[RetrievedChunk] = []
+    seen_ids: set[str] = set()
+
+    # 1. Micro-level search: table_row_store semantic vector search
+    try:
+        row_sql = f"""
+            SELECT
+                trs.id::text, trs.document_id::text,
+                trs.row_text AS text,
+                ts.page_number, ts.markdown_text,
+                (trs.embedding <=> %s::vector) AS distance,
+                dr.original_filename, dr.document_type,
+                dr.storage_path, dr.storage_bucket, ts.bbox,
+                trs.table_id::text
+            FROM multi_store_rag_working.table_row_store trs
+            JOIN multi_store_rag_working.table_store ts ON ts.id = trs.table_id
+            JOIN multi_store_rag_working.document_registry dr ON dr.id = trs.document_id
+            WHERE dr.status = 'completed' AND trs.embedding IS NOT NULL
+            {type_sql} {doc_sql} {filter_sql}
+            ORDER BY trs.embedding <=> %s::vector
+            LIMIT %s
+        """
+        row_params = [emb] + type_params + doc_params + filter_params + [emb, top_k]
+        with conn.cursor() as cur:
+            cur.execute(row_sql, row_params)
+            for r in cur.fetchall():
+                seen_ids.add(r[0])
+                chunks.append(
+                    RetrievedChunk(
+                        chunk_id=r[0], document_id=r[1], text=r[2],
+                        page_number=r[3], table_markdown=r[4],
+                        distance=float(r[5]),
+                        document_filename=r[6], document_type=r[7],
+                        pdf_storage_path=r[8], pdf_bucket=r[9], bbox=r[10],
+                        store_type="table",
+                        is_child_match=True,
+                    )
+                )
+    except Exception as row_exc:
+        logger.debug("table_row_store ANN search failed/skipped: %s", row_exc)
+
+    # 2. Macro-level search: table_store parent summary ANN
     vexpr = "COALESCE(ts.structured_content_embedding, ts.embedding)"
     sql = f"""
         SELECT
@@ -906,17 +936,22 @@ def _query_table_store_parent_only(
         cur.execute(sql, params)
         rows = cur.fetchall()
 
-    return [
-        RetrievedChunk(
-            chunk_id=r[0], document_id=r[1], text=r[2],
-            page_number=r[3], table_markdown=r[4],
-            distance=float(r[5]),
-            document_filename=r[6], document_type=r[7],
-            pdf_storage_path=r[8], pdf_bucket=r[9], bbox=r[10],
-            store_type="table",
-        )
-        for r in rows
-    ]
+    for r in rows:
+        if r[0] not in seen_ids:
+            seen_ids.add(r[0])
+            chunks.append(
+                RetrievedChunk(
+                    chunk_id=r[0], document_id=r[1], text=r[2],
+                    page_number=r[3], table_markdown=r[4],
+                    distance=float(r[5]),
+                    document_filename=r[6], document_type=r[7],
+                    pdf_storage_path=r[8], pdf_bucket=r[9], bbox=r[10],
+                    store_type="table",
+                )
+            )
+
+    chunks.sort(key=lambda c: c.distance)
+    return chunks[:top_k]
 
 
 # NOTE: image_store is no longer a searchable store. It has no embedding column

@@ -8,8 +8,8 @@ def gpu_ping(msg: str):
     """Registered @spaces.GPU function for Hugging Face ZeroGPU supervisor."""
     return f"ZeroGPU Active: {msg}"
 
-with gr.Blocks(title="Multi-Store RAG Backend API") as demo:
-    gr.Markdown("# 🚀 Multi-Store RAG Backend API")
+with gr.Blocks(title="Enterprise RAG Backend API") as demo:
+    gr.Markdown("# 🚀 Enterprise RAG Backend API")
     gr.Markdown("""
     The FastAPI backend is operational on Hugging Face ZeroGPU.
     - **Swagger UI**: [`/api/docs`](./api/docs)

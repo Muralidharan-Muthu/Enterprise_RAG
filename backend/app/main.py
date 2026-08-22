@@ -92,8 +92,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Multi-Store RAG Chatbot API",
-    description="Enterprise Agentic RAG — ingestion pipeline for multi-store document intelligence",
+    title="Enterprise RAG API",
+    description="Enterprise Agentic RAG — Ingestion & multi-store document intelligence platform",
     version="1.0.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -121,4 +121,4 @@ app.include_router(auth_routes.router, prefix="/api/v1/auth", tags=["auth"])
 
 @app.get("/", include_in_schema=False)
 def root():
-    return {"service": "Multi-Store RAG Chatbot API", "version": "1.0.0", "docs": "/api/docs"}
+    return {"service": "Enterprise RAG API", "version": "1.0.0", "docs": "/api/docs"}

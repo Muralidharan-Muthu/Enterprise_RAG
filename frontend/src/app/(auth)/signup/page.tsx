@@ -69,7 +69,7 @@ export default function SignupPage() {
         </div>
         <h1 className="text-2xl font-bold text-white">Create account</h1>
         <p className="text-sm text-gray-400 mt-1">
-          Get started with Multi-Store RAG
+          Get started with Enterprise RAG
         </p>
       </div>
 

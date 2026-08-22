@@ -37,7 +37,7 @@ export default function LoginPage() {
           <Zap className="w-7 h-7 text-white" />
         </div>
         <h1 className="text-2xl font-bold text-white">Welcome back</h1>
-        <p className="text-sm text-gray-400 mt-1">Sign in to Multi-Store RAG</p>
+        <p className="text-sm text-gray-400 mt-1">Sign in to Enterprise RAG</p>
       </div>
 
       {/* Card */}

@@ -8,8 +8,8 @@ import { Header } from "@/components/layout/Header";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Multi-Store RAG Chatbot",
-  description: "Enterprise Agentic RAG — Multi-Retriever Document Intelligence",
+  title: "Enterprise RAG",
+  description: "Enterprise Agentic RAG — Multi-Store Document Intelligence Platform",
   icons: {
     icon: "/icon.svg",
   },

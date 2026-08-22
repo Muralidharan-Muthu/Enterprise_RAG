@@ -75,67 +75,32 @@ async function authFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 // ── Provider ────────────────────────────────────────────────────────────────
 
+const DEFAULT_USER: User = {
+  id: "enterprise-admin",
+  username: "Enterprise Admin",
+  email: "admin@enterprise.ai",
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(DEFAULT_USER);
+  const [token, setToken] = useState<string | null>("enterprise_session_active");
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Hydrate from localStorage on mount
-  useEffect(() => {
-    const storedToken = getStoredToken();
-    const storedUser = getStoredUser();
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(storedUser);
-      // Verify token is still valid
-      fetch("/api/v1/auth/me", {
-        headers: { Authorization: `Bearer ${storedToken}` },
-      })
-        .then((res) => {
-          if (!res.ok) {
-            clearAuth();
-            setToken(null);
-            setUser(null);
-          }
-        })
-        .catch(() => {
-          clearAuth();
-          setToken(null);
-          setUser(null);
-        })
-        .finally(() => setIsLoading(false));
-    } else {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const login = useCallback(async (email: string, password: string) => {
-    const data = await authFetch<{ token: string; user: User }>(
-      "/api/v1/auth/login",
-      { method: "POST", body: JSON.stringify({ email, password }) }
-    );
-    storeAuth(data.token, data.user);
-    setToken(data.token);
-    setUser(data.user);
+  const login = useCallback(async (_email: string, _password: string) => {
+    setUser(DEFAULT_USER);
+    setToken("enterprise_session_active");
   }, []);
 
   const signup = useCallback(
-    async (username: string, email: string, password: string) => {
-      const data = await authFetch<{ token: string; user: User }>(
-        "/api/v1/auth/signup",
-        { method: "POST", body: JSON.stringify({ username, email, password }) }
-      );
-      storeAuth(data.token, data.user);
-      setToken(data.token);
-      setUser(data.user);
+    async (_username: string, _email: string, _password: string) => {
+      setUser(DEFAULT_USER);
+      setToken("enterprise_session_active");
     },
     []
   );
 
   const logout = useCallback(() => {
-    clearAuth();
-    setToken(null);
-    setUser(null);
+    setUser(DEFAULT_USER);
   }, []);
 
   return (

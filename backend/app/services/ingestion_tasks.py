@@ -610,9 +610,8 @@ def chunk_embed_store_task(self, prev: dict, document_id: str, job_id: str) -> d
         if _cfg.TABLE_CELL_STORE_ENABLED:
             try:
                 from app.services import table_schema_service
-                from app.db.repositories.table_cell_store import (
-                    insert_table_rows, insert_table_cells,
-                )
+                from app.services.embedding_service import embed_passages
+                from app.db.repositories.table_cell_store import insert_table_rows
 
                 parent_ids = stored_ids.get("table_store", [])
                 table_index_to_uuid: dict[int, str] = {
@@ -626,14 +625,22 @@ def chunk_embed_store_task(self, prev: dict, document_id: str, job_id: str) -> d
                     table_uuid = table_index_to_uuid.get(t.table_index)
                     if table_uuid is None or not t.headers or not t.rows:
                         continue
+                    unified = table_schema_service.build_unified_rows(t.headers, t.rows)
+                    row_texts = [r.row_text for r in unified if r.row_text]
+                    row_embs = None
+                    if row_texts:
+                        try:
+                            row_embs = embed_passages(row_texts)
+                        except Exception as _emb_err:
+                            logger.warning("[%s] table row embedding failed: %s", document_id, _emb_err)
                     row_tuples = table_schema_service.build_row_store_rows(
-                        document_id, table_uuid, t.headers, t.rows,
+                        document_id, table_uuid, t.headers, t.rows, embeddings=row_embs,
                     )
                     total_rows += insert_table_rows(row_tuples)
 
                 if total_rows:
                     logger.info(
-                        "[%s] Stored %d unified row(s) in table_row_store",
+                        "[%s] Stored %d unified row(s) with embeddings in table_row_store",
                         document_id, total_rows,
                     )
             except Exception as _cell_exc:

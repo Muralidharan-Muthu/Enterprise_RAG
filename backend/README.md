@@ -9,6 +9,6 @@ app_file: app.py
 pinned: false
 ---
 
-# Multi-Store RAG Backend API
+# Enterprise RAG Backend API
 
-FastAPI backend for the Multi-Store RAG Chatbot running on Hugging Face Spaces.
+FastAPI backend for Enterprise RAG running on Hugging Face Spaces.
