@@ -25,4 +25,7 @@ RUN python -c "from huggingface_hub import snapshot_download; snapshot_download(
 
 COPY . .
 
-EXPOSE 8000
+# HF Spaces requires port 7860
+EXPOSE 7860
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]

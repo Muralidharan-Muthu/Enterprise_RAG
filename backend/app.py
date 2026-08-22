@@ -1,20 +1,16 @@
-import os
+"""
+Hugging Face Spaces entrypoint for Enterprise RAG Backend.
+
+With sdk: docker, this file is NOT auto-executed — the Dockerfile CMD runs
+uvicorn app.main:app directly. This module is kept for optional manual use
+and for the docling_models pre-caching utility.
+"""
 import threading
 from pathlib import Path
-import gradio as gr
-import spaces
-
-from starlette.types import ASGIApp, Receive, Scope, Send
-
-
-@spaces.GPU
-def zerogpu_handler(msg: str) -> str:
-    """Registered @spaces.GPU function for Hugging Face ZeroGPU supervisor."""
-    return f"ZeroGPU Hardware Allocated: {msg or 'OK'}"
 
 
 def ensure_docling_models():
-    """Ensure docling_models folder is downloaded and available on Hugging Face Spaces."""
+    """Ensure docling_models folder is downloaded and available."""
     artifacts_dir = Path(__file__).resolve().parent / "docling_models"
     model_artifacts = artifacts_dir / "model_artifacts"
     if not (model_artifacts.exists() and any(model_artifacts.iterdir())):
@@ -32,114 +28,12 @@ def ensure_docling_models():
             print(f"[Docling] Model setup note: {e}")
 
 
-# Start docling models download in background thread so app startup completes without blocking
+# Start docling models download in background thread on import
 threading.Thread(target=ensure_docling_models, daemon=True).start()
 
 
-def check_api_health(msg: str) -> str:
-    """Instant CPU health check returning in <1ms without any queue delays."""
-    return f"⚡ Enterprise RAG API is Healthy, Online & Operational! (Message: '{msg or 'ping'}')"
-
-
-# ── Build the Gradio UI ──────────────────────────────────────────────────
-with gr.Blocks(title="Enterprise RAG Backend API") as demo:
-    gr.Markdown("# 🚀 Enterprise RAG Backend API")
-    gr.Markdown("""
-    FastAPI backend is live and serving all Enterprise RAG API endpoints.
-    - **Interactive API Docs (Swagger)**: [`/api/docs`](./api/docs)
-    - **Health Check Endpoint**: [`/api/v1/health`](./api/v1/health)
-    - **Query API Endpoint**: `/api/v1/query`
-    """)
-    with gr.Group():
-        inp = gr.Textbox(value="ping", label="Test Connection", placeholder="Enter text to ping the backend...")
-        out = gr.Textbox(label="Backend Response", interactive=False)
-        with gr.Row():
-            btn_fast = gr.Button("⚡ Instant API Health Check", variant="primary")
-            btn_gpu = gr.Button("🚀 Test ZeroGPU Allocation", variant="secondary")
-    
-    btn_fast.click(fn=check_api_health, inputs=inp, outputs=out, queue=False)
-    btn_gpu.click(fn=zerogpu_handler, inputs=inp, outputs=out)
-
-
-# ── Build the FastAPI sub-app for /api/* routes ──────────────────────────
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from app.config import settings
-from app.core.logging import setup_logging
-from app.core.tracing import setup_tracing
-from app.main import lifespan
-from app.api.routes import health, ingestion, documents, query, chats, graph as graph_routes, auth as auth_routes
-
-setup_logging()
-
-api_app = FastAPI(
-    title="Enterprise RAG API",
-    description="Enterprise Agentic RAG — Ingestion & multi-store document intelligence platform",
-    version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    lifespan=lifespan,
-)
-
-setup_tracing(api_app)
-
-api_app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-api_app.include_router(health.router, prefix="/v1")
-api_app.include_router(ingestion.router, prefix="/v1/ingest", tags=["ingestion"])
-api_app.include_router(documents.router, prefix="/v1/documents", tags=["documents"])
-api_app.include_router(query.router, prefix="/v1", tags=["query"])
-api_app.include_router(chats.router, prefix="/v1/chats", tags=["chats"])
-api_app.include_router(graph_routes.router, prefix="/v1/graph", tags=["graph"])
-api_app.include_router(auth_routes.router, prefix="/v1/auth", tags=["auth"])
-
-
-@api_app.get("/", include_in_schema=False)
-def api_root():
-    return {"service": "Enterprise RAG API", "version": "1.0.0", "docs": "/api/docs"}
-
-
-# ── ASGI Middleware to intercept /api/* before Gradio's SSR ──────────────
-#
-# Gradio's SSR uses a SvelteKit Node.js server that catches ALL routes
-# including /api/*. No amount of Starlette route insertion helps because
-# the SSR middleware runs before route matching.
-#
-# This ASGI middleware wraps Gradio's entire ASGI app: if the path starts
-# with /api, it strips the prefix and delegates to our FastAPI app.
-# Everything else passes through to Gradio unchanged.
-
-class ApiRoutingMiddleware:
-    """ASGI middleware that routes /api/* to FastAPI, everything else to Gradio."""
-    
-    def __init__(self, gradio_asgi: ASGIApp, fastapi_asgi: ASGIApp):
-        self.gradio = gradio_asgi
-        self.fastapi = fastapi_asgi
-    
-    async def __call__(self, scope: Scope, receive: Receive, send: Send):
-        if scope["type"] in ("http", "websocket"):
-            path = scope.get("path", "")
-            if path.startswith("/api"):
-                # Strip /api prefix so FastAPI sees /v1/health, /docs, etc.
-                scope = dict(scope)
-                scope["path"] = path[4:] or "/"
-                scope["raw_path"] = (path[4:] or "/").encode()
-                await self.fastapi(scope, receive, send)
-                return
-        await self.gradio(scope, receive, send)
-
-
-# Wrap Gradio's internal ASGI app with our routing middleware
-_original_asgi = demo.app
-demo.app = ApiRoutingMiddleware(_original_asgi, api_app)  # type: ignore[assignment]
-
-
 if __name__ == "__main__":
+    import uvicorn
+    import os
     port = int(os.getenv("PORT", 7860))
-    demo.launch(server_name="0.0.0.0", server_port=port)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port)
