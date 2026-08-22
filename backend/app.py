@@ -46,10 +46,10 @@ with gr.Blocks(title="Enterprise RAG Backend API") as demo:
     btn = gr.Button("Check Service Health", variant="primary")
     btn.click(fn=health_ping, inputs=inp, outputs=out)
 
-# Mount Gradio once onto the FastAPI application at /ui
-app = gr.mount_gradio_app(fastapi_app, demo, path="/ui")
+# Mount all FastAPI routes and lifespan onto Gradio's internal FastAPI application
+demo.app.include_router(fastapi_app.router)
+demo.app.router.lifespan_context = fastapi_app.router.lifespan_context
 
 if __name__ == "__main__":
-    import uvicorn
     port = int(os.getenv("PORT", 7860))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    demo.launch(server_name="0.0.0.0", server_port=port)
