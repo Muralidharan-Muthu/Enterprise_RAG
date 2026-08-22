@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 
 const BACKEND =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+  process.env.NEXT_PUBLIC_API_URL || "https://muralidharan007-multi-store-rag-backend.hf.space";
 
 /**
  * Streaming SSE proxy for /api/v1/query/stream.

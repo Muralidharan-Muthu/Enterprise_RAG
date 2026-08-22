@@ -21,9 +21,7 @@ import type {
 } from "./types";
 import { getAuthToken } from "./auth";
 
-// Use empty base so requests go through Next.js proxy (/api/* → backend).
-// Direct http://localhost:8000 bypasses the proxy and hits CORS on non-3000 ports.
-const BASE = typeof window !== "undefined" ? "" : (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000");
+const BASE = typeof window !== "undefined" ? "" : (process.env.NEXT_PUBLIC_API_URL || "https://muralidharan007-multi-store-rag-backend.hf.space");
 
 function _authHeaders(): Record<string, string> {
   const token = getAuthToken();

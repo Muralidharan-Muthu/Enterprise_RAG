@@ -2637,8 +2637,7 @@ export default function QueryPage() {
   const [rerankerName, setRerankerName] = useState("ms-marco-MiniLM-L-6-v2");
 
   useEffect(() => {
-    const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    fetch(`${API}/api/v1/health`)
+    fetch("/api/v1/health")
       .then((r) => r.json())
       .then((d) => {
         if (d.embedding_model) setEmbeddingModel(d.embedding_model);

@@ -144,7 +144,7 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     LOG_LEVEL: str = "INFO"
     MAX_UPLOAD_SIZE_MB: int = 100
-    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:3001"]
+    CORS_ORIGINS: list[str] = ["*"]
 
     # ── Chunking ──────────────────────────────────────────────
     CHUNK_SIZE_TOKENS: int = 512

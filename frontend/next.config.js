@@ -14,7 +14,7 @@ const nextConfig = {
       fallback: [
         {
           source: "/api/:path*",
-          destination: `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/:path*`,
+          destination: `${process.env.NEXT_PUBLIC_API_URL || "https://muralidharan007-multi-store-rag-backend.hf.space"}/api/:path*`,
         },
       ],
     };
