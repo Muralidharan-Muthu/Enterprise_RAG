@@ -2,7 +2,25 @@ import os
 import threading
 from pathlib import Path
 import gradio as gr
-from app.main import app as fastapi_app
+from fastapi.middleware.cors import CORSMiddleware
+from app.config import settings
+from app.api.routes import health, ingestion, documents, query, chats, graph as graph_routes, auth as auth_routes
+from app.main import lifespan
+
+try:
+    import spaces
+    gpu_decorator = spaces.GPU
+except Exception:
+    def gpu_decorator(*args, **kwargs):
+        def wrapper(fn):
+            return fn
+        return wrapper if not args or not callable(args[0]) else args[0]
+
+
+@gpu_decorator(duration=10)
+def zerogpu_handler(msg: str) -> str:
+    """Registered @spaces.GPU function for ZeroGPU supervisor compliance."""
+    return f"ZeroGPU Hardware Allocated: {msg or 'OK'}"
 
 
 def ensure_docling_models():
@@ -44,17 +62,35 @@ with gr.Blocks(title="Enterprise RAG Backend API") as demo:
     with gr.Group():
         inp = gr.Textbox(value="ping", label="Test Connection", placeholder="Enter text to ping the backend...")
         out = gr.Textbox(label="Backend Response", interactive=False)
-        btn = gr.Button("⚡ Instant API Health Check", variant="primary")
+        with gr.Row():
+            btn_fast = gr.Button("⚡ Instant API Health Check", variant="primary")
+            btn_gpu = gr.Button("🚀 Test ZeroGPU Allocation", variant="secondary")
     
-    btn.click(fn=check_api_health, inputs=inp, outputs=out, queue=False)
+    btn_fast.click(fn=check_api_health, inputs=inp, outputs=out, queue=False)
+    btn_gpu.click(fn=zerogpu_handler, inputs=inp, outputs=out)
 
 
-# Mount Gradio at /gradio and /ui on top of the FastAPI application.
-# FastAPI serves /api/v1/*, /api/docs, / directly as JSON & Swagger.
-# Gradio UI is accessible at /gradio or /ui.
-app = gr.mount_gradio_app(fastapi_app, demo, path="/gradio")
+# Add CORS middleware to demo.app
+demo.app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Register all API routes onto demo.app
+demo.app.include_router(health.router, prefix="/api/v1")
+demo.app.include_router(ingestion.router, prefix="/api/v1/ingest", tags=["ingestion"])
+demo.app.include_router(documents.router, prefix="/api/v1/documents", tags=["documents"])
+demo.app.include_router(query.router, prefix="/api/v1", tags=["query"])
+demo.app.include_router(chats.router, prefix="/api/v1/chats", tags=["chats"])
+demo.app.include_router(graph_routes.router, prefix="/api/v1/graph", tags=["graph"])
+demo.app.include_router(auth_routes.router, prefix="/api/v1/auth", tags=["auth"])
+
+# Wire lifespan into demo.app
+demo.app.router.lifespan_context = lifespan
 
 if __name__ == "__main__":
-    import uvicorn
     port = int(os.getenv("PORT", 7860))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    demo.launch(server_name="0.0.0.0", server_port=port)
