@@ -4,6 +4,19 @@ from pathlib import Path
 import gradio as gr
 from app.main import app as fastapi_app
 
+try:
+    import spaces
+    gpu_decorator = spaces.GPU
+except Exception:
+    def gpu_decorator(fn):
+        return fn
+
+
+@gpu_decorator
+def gpu_health_check(msg: str) -> str:
+    """Registered @spaces.GPU function for Hugging Face ZeroGPU supervisor."""
+    return f"ZeroGPU & Enterprise RAG Backend Active: {msg or 'OK'}"
+
 
 def ensure_docling_models():
     """Ensure docling_models folder is downloaded and available on Hugging Face Spaces."""
@@ -28,11 +41,6 @@ def ensure_docling_models():
 threading.Thread(target=ensure_docling_models, daemon=True).start()
 
 
-def health_ping(msg: str) -> str:
-    """Simple status check for Gradio UI."""
-    return f"Enterprise RAG Backend Active: {msg or 'OK'}"
-
-
 with gr.Blocks(title="Enterprise RAG Backend API") as demo:
     gr.Markdown("# 🚀 Enterprise RAG Backend API")
     gr.Markdown("""
@@ -44,7 +52,7 @@ with gr.Blocks(title="Enterprise RAG Backend API") as demo:
     inp = gr.Textbox(value="ping", label="Test Connection")
     out = gr.Textbox(label="Result")
     btn = gr.Button("Check Service Health", variant="primary")
-    btn.click(fn=health_ping, inputs=inp, outputs=out)
+    btn.click(fn=gpu_health_check, inputs=inp, outputs=out)
 
 # Mount all FastAPI routes and lifespan onto Gradio's internal FastAPI application
 demo.app.include_router(fastapi_app.router)
@@ -52,4 +60,4 @@ demo.app.router.lifespan_context = fastapi_app.router.lifespan_context
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 7860))
-    demo.launch(server_name="0.0.0.0", server_port=port)
+    demo.launch(server_name="0.0.0.0", server_port=port, ssr=False)
