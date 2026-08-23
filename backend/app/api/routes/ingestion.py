@@ -137,10 +137,22 @@ def _register_and_dispatch(
                 (job_id, document_id),
             )
 
+    # Always launch in-process background thread so ingestion executes immediately in container
+    import threading
+    from app.services.ingestion_orchestrator import ingest_document
+
+    def _bg_run():
+        try:
+            logger.info("Starting background ingestion for doc %s (job %s)", document_id, job_id)
+            ingest_document.run(document_id, storage_path, job_id)
+            logger.info("Completed background ingestion for doc %s (job %s)", document_id, job_id)
+        except Exception as bg_err:
+            logger.error("Background ingestion failed for %s: %s", document_id, bg_err, exc_info=True)
+
+    threading.Thread(target=_bg_run, daemon=True, name=f"ingest-{document_id}").start()
+
+    # Also best-effort notify Celery if a worker is active
     try:
-        # Dispatch by task name via send_task — importing the orchestrator
-        # module would trigger embedding_service.warmup(), loading the 1.3 GB
-        # BGE model into the API process. The worker owns that model.
         from app.core.background_tasks import celery_app
         task = celery_app.send_task(
             "app.services.ingestion_orchestrator.ingest_document",
@@ -155,29 +167,7 @@ def _register_and_dispatch(
                     (task.id, job_id),
                 )
     except Exception as exc:
-        logger.warning("Celery dispatch warning (%s) — attempting in-process background processing", exc)
-        try:
-            import threading
-            from app.services import ingestion_orchestrator
-
-            def _bg_run():
-                try:
-                    ingestion_orchestrator.ingest_document(document_id, storage_path, job_id)
-                except Exception as bg_err:
-                    logger.error("Background ingestion failed for %s: %s", document_id, bg_err)
-
-            threading.Thread(target=_bg_run, daemon=True).start()
-        except Exception as fallback_exc:
-            logger.error("Failed to dispatch ingestion task for %s: %s", document_id, fallback_exc)
-            with get_db() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """UPDATE multi_store_rag_working.document_registry
-                           SET status = 'failed', error_stage = 'dispatch', error_message = %s
-                           WHERE id = %s""",
-                        (str(fallback_exc), document_id),
-                    )
-            raise
+        logger.info("Celery broker notification skipped (%s) — running via in-process background thread", exc)
 
     return document_id, job_id
 

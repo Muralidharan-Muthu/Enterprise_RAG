@@ -76,8 +76,37 @@ async def lifespan(app: FastAPI):
                 )
             else:
                 logger.info("Hybrid keyword search: all tsvector columns present.")
-        except Exception as _tsv_exc:
-            logger.warning("tsvector column verification failed (non-fatal): %s", _tsv_exc)
+    # Auto-recover any jobs stuck in queued/uploaded state on server startup
+    def _recover_stuck_jobs():
+        try:
+            import time
+            time.sleep(3)
+            from app.db.connection import get_db
+            from app.services.ingestion_orchestrator import ingest_document
+            with get_db() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT d.id, d.storage_path, j.id
+                        FROM multi_store_rag_working.document_registry d
+                        JOIN multi_store_rag_working.ingestion_jobs j ON j.document_id = d.id
+                        WHERE d.status IN ('uploaded', 'processing') AND j.current_stage IN ('queued', 'parsing')
+                        ORDER BY d.created_at ASC
+                        LIMIT 10
+                        """
+                    )
+                    stuck = cur.fetchall()
+            for doc_id, storage_path, job_id in stuck:
+                logger.info("Auto-recovering stuck ingestion job for doc %s (job %s)", doc_id, job_id)
+                try:
+                    ingest_document.run(doc_id, storage_path, job_id)
+                except Exception as rec_err:
+                    logger.error("Failed to auto-recover job %s: %s", job_id, rec_err)
+        except Exception as scan_err:
+            logger.warning("Startup job recovery scan: %s", scan_err)
+
+    import threading
+    threading.Thread(target=_recover_stuck_jobs, daemon=True, name="job-recovery").start()
 
     yield
 
