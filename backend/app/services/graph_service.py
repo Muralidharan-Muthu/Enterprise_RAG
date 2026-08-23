@@ -103,7 +103,7 @@ def _get_driver():
 def _session(drv):
     """Open a session, specifying database when NEO4J_DATABASE is set (required for Aura)."""
     db = (settings.NEO4J_DATABASE or "").strip()
-    if db:
+    if db and db.lower() not in ("neo4j", "system", "default", "none"):
         return drv.session(database=db)
     return drv.session()
 
