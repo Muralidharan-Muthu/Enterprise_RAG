@@ -76,6 +76,9 @@ async def lifespan(app: FastAPI):
                 )
             else:
                 logger.info("Hybrid keyword search: all tsvector columns present.")
+        except Exception as _tsv_exc:
+            logger.warning("tsvector column verification failed (non-fatal): %s", _tsv_exc)
+
     # Auto-recover any jobs stuck in queued/uploaded state on server startup
     def _recover_stuck_jobs():
         try:
