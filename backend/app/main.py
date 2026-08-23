@@ -83,7 +83,7 @@ async def lifespan(app: FastAPI):
     def _recover_stuck_jobs():
         try:
             import time
-            time.sleep(3)
+            time.sleep(15)
             from app.db.connection import get_db
             from app.services.ingestion_orchestrator import ingest_document
             with get_db() as conn:

@@ -26,12 +26,7 @@ from app.services.supabase_storage import upload_file
 
 logger = logging.getLogger(__name__)
 
-# Pre-load BGE model at worker startup (avoids 1.3GB reload on each task)
-try:
-    from app.services.embedding_service import warmup
-    warmup()
-except Exception as _warmup_err:
-    logger.warning("Embedding model warmup failed: %s", _warmup_err)
+# Embedding model loads lazily on first task execution to keep server startup instant
 
 
 def _stamp_worker_identity(job_id: str, document_id: str) -> None:
