@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const BACKEND =
-  process.env.NEXT_PUBLIC_API_URL || "https://muralidharan007-multi-store-rag-backend.hf.space";
+  process.env.NEXT_PUBLIC_API_URL || "https://multi-store-rag-chatbot-production.up.railway.app";
 
 /**
  * Custom proxy for /api/v1/query that sets a generous timeout.

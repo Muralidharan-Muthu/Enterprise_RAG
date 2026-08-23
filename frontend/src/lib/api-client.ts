@@ -21,7 +21,7 @@ import type {
 } from "./types";
 import { getAuthToken } from "./auth";
 
-const BASE = typeof window !== "undefined" ? "" : (process.env.NEXT_PUBLIC_API_URL || "https://muralidharan007-multi-store-rag-backend.hf.space");
+const BASE = typeof window !== "undefined" ? "" : (process.env.NEXT_PUBLIC_API_URL || "https://multi-store-rag-chatbot-production.up.railway.app");
 
 function _authHeaders(): Record<string, string> {
   const token = getAuthToken();

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND = process.env.NEXT_PUBLIC_API_URL || "https://muralidharan007-multi-store-rag-backend.hf.space";
+const BACKEND = process.env.NEXT_PUBLIC_API_URL || "https://multi-store-rag-chatbot-production.up.railway.app";
 
 async function proxy(req: NextRequest, pathSegments?: string[]) {
   const subpath = pathSegments && pathSegments.length > 0 ? `/${pathSegments.join("/")}` : "";

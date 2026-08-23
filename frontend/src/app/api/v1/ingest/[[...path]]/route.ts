@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND = process.env.NEXT_PUBLIC_API_URL || "https://muralidharan007-multi-store-rag-backend.hf.space";
+const BACKEND = process.env.NEXT_PUBLIC_API_URL || "https://multi-store-rag-chatbot-production.up.railway.app";
 
 // Uploads can be large (PDFs) and slow (Supabase Storage upload + DB insert).
 // The default Next.js rewrite proxy uses Node's default HTTP agent which drops

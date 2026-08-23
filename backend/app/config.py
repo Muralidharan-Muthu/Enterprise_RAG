@@ -144,7 +144,7 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     LOG_LEVEL: str = "INFO"
     MAX_UPLOAD_SIZE_MB: int = 100
-    CORS_ORIGINS: list[str] = ["*"]
+    CORS_ORIGINS: list[str] | str = ["*"]
 
     # ── Chunking ──────────────────────────────────────────────
     CHUNK_SIZE_TOKENS: int = 512
@@ -429,7 +429,15 @@ class Settings(BaseSettings):
     @classmethod
     def parse_cors(cls, v):
         if isinstance(v, str):
-            return json.loads(v)
+            v = v.strip()
+            if v.startswith("[") and v.endswith("]"):
+                try:
+                    return json.loads(v)
+                except Exception:
+                    pass
+            if "," in v:
+                return [i.strip() for i in v.split(",") if i.strip()]
+            return [v] if v else ["*"]
         return v
 
     @property
