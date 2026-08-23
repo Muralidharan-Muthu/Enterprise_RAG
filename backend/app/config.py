@@ -470,9 +470,11 @@ class Settings(BaseSettings):
 
         def _sanitize_redis_ssl(u: str) -> str:
             u = (u or "").strip()
+            # Replace uppercase CERT_NONE with lowercase none for redis-py compatibility
+            u = u.replace("ssl_cert_reqs=CERT_NONE", "ssl_cert_reqs=none")
             if u.startswith("rediss://") and "ssl_cert_reqs" not in u:
                 sep = "&" if "?" in u else "?"
-                return f"{u}{sep}ssl_cert_reqs=CERT_NONE"
+                return f"{u}{sep}ssl_cert_reqs=none"
             return u
 
         self.REDIS_URL = _sanitize_redis_ssl(self.REDIS_URL)

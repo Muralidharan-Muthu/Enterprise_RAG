@@ -15,7 +15,11 @@ router = APIRouter()
  
 def _check_redis() -> str:
     try:
-        r = redis_client.from_url(settings.REDIS_URL, socket_connect_timeout=2)
+        url = settings.REDIS_URL
+        if url.startswith("rediss://") and "ssl_cert_reqs" not in url:
+            r = redis_client.from_url(url, socket_connect_timeout=3, ssl_cert_reqs="none")
+        else:
+            r = redis_client.from_url(url, socket_connect_timeout=3)
         r.ping()
         return "ok"
     except Exception as exc:
