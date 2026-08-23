@@ -6,14 +6,18 @@ const BACKEND =
 
 export const dynamic = "force-dynamic";
 
-async function handleProxy(req: NextRequest, { params }: { params: { path: string[] } }) {
+async function handleProxy(req: NextRequest, context: { params: Promise<{ path: string[] }> | { path: string[] } }) {
+  const params = await context.params;
   const path = params.path ? params.path.join("/") : "";
   const search = req.nextUrl.search;
   const targetUrl = `${BACKEND}/api/v1/${path}${search}`;
 
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {
+    "Accept": "application/json",
+  };
   req.headers.forEach((value, key) => {
-    if (!["host", "connection", "content-length"].includes(key.toLowerCase())) {
+    const k = key.toLowerCase();
+    if (!["host", "connection", "content-length", "content-encoding"].includes(k)) {
       headers[key] = value;
     }
   });
@@ -29,12 +33,26 @@ async function handleProxy(req: NextRequest, { params }: { params: { path: strin
       cache: "no-store",
     });
 
+    const contentType = upstreamRes.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const data = await upstreamRes.json();
+      return NextResponse.json(data, {
+        status: upstreamRes.status,
+        headers: {
+          "Cache-Control": "no-store, max-age=0",
+        },
+      });
+    }
+
+    const data = await upstreamRes.arrayBuffer();
     const resHeaders = new Headers();
     upstreamRes.headers.forEach((val, key) => {
-      resHeaders.set(key, val);
+      if (!["content-encoding", "transfer-encoding"].includes(key.toLowerCase())) {
+        resHeaders.set(key, val);
+      }
     });
 
-    return new NextResponse(upstreamRes.body, {
+    return new NextResponse(data, {
       status: upstreamRes.status,
       statusText: upstreamRes.statusText,
       headers: resHeaders,
