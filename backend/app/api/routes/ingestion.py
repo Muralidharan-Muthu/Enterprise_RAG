@@ -155,16 +155,29 @@ def _register_and_dispatch(
                     (task.id, job_id),
                 )
     except Exception as exc:
-        logger.error("Failed to dispatch ingestion task for %s: %s", document_id, exc)
-        with get_db() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """UPDATE multi_store_rag_working.document_registry
-                       SET status = 'failed', error_stage = 'dispatch', error_message = %s
-                       WHERE id = %s""",
-                    (str(exc), document_id),
-                )
-        raise
+        logger.warning("Celery dispatch warning (%s) — attempting in-process background processing", exc)
+        try:
+            import threading
+            from app.services import ingestion_orchestrator
+
+            def _bg_run():
+                try:
+                    ingestion_orchestrator.ingest_document(document_id, storage_path, job_id)
+                except Exception as bg_err:
+                    logger.error("Background ingestion failed for %s: %s", document_id, bg_err)
+
+            threading.Thread(target=_bg_run, daemon=True).start()
+        except Exception as fallback_exc:
+            logger.error("Failed to dispatch ingestion task for %s: %s", document_id, fallback_exc)
+            with get_db() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """UPDATE multi_store_rag_working.document_registry
+                           SET status = 'failed', error_stage = 'dispatch', error_message = %s
+                           WHERE id = %s""",
+                        (str(fallback_exc), document_id),
+                    )
+            raise
 
     return document_id, job_id
 

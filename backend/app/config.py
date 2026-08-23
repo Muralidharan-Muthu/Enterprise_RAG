@@ -466,8 +466,18 @@ class Settings(BaseSettings):
         self.GROQ_EXTRACTION_MODEL = (self.GROQ_EXTRACTION_MODEL or self.GROQ_MODEL_NAME).strip()
         self.GROQ_SPYDER_MODEL = (self.GROQ_SPYDER_MODEL or self.GROQ_MODEL_NAME).strip()
         self.GROQ_RAVEN_MODEL = (self.GROQ_RAVEN_MODEL or self.GROQ_MODEL_NAME).strip()
-        self.GROQ_ENRICHMENT_MODEL = (self.GROQ_ENRICHMENT_MODEL or self.GROQ_MODEL_NAME).strip()
         self.GROQ_CHAT_MODEL = (self.GROQ_CHAT_MODEL or self.GROQ_MODEL_NAME).strip()
+
+        def _sanitize_redis_ssl(u: str) -> str:
+            u = (u or "").strip()
+            if u.startswith("rediss://") and "ssl_cert_reqs" not in u:
+                sep = "&" if "?" in u else "?"
+                return f"{u}{sep}ssl_cert_reqs=CERT_NONE"
+            return u
+
+        self.REDIS_URL = _sanitize_redis_ssl(self.REDIS_URL)
+        self.CELERY_BROKER_URL = _sanitize_redis_ssl(self.CELERY_BROKER_URL)
+        self.CELERY_RESULT_BACKEND = _sanitize_redis_ssl(self.CELERY_RESULT_BACKEND)
 
 
 
