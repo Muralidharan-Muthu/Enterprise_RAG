@@ -10,6 +10,7 @@ import {
   Database,
   Cpu,
   Network,
+  Zap,
   ChevronRight,
 } from "lucide-react";
 
@@ -54,6 +55,8 @@ export function Header() {
             <HealthPill label="API" status={health.api} icon={Server} />
             <span className="text-slate-300 dark:text-zinc-700 text-xs">•</span>
             <HealthPill label="Postgres" status={health.database} icon={Database} />
+            <span className="text-slate-300 dark:text-zinc-700 text-xs">•</span>
+            <HealthPill label="Redis" status={health.redis ?? "unknown"} icon={Zap} />
             <span className="text-slate-300 dark:text-zinc-700 text-xs">•</span>
             <HealthPill
               label="Groq"
