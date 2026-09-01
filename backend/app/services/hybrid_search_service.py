@@ -192,7 +192,6 @@ def _run_kw_store_query(store_key: str, query_fn, query: str, document_types, do
 # store_type -> (table, tsvector column) expected by the keyword_search SQL above.
 _EXPECTED_TSV_COLUMNS = {
     "vector_store": "chunk_text_tsv",
-    "document_store": "chunk_text_tsv",
     "clause_store": "clause_text_tsv",
     "table_store": "table_text_tsv",
 }
