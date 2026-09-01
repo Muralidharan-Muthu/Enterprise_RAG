@@ -242,13 +242,21 @@ def _resolve_do_ocr(path: Optional[Path]) -> bool:
 
 
 def _resolve_local_artifacts_path() -> Optional[Path]:
-    for candidate in [
+    candidates = [
         Path(__file__).resolve().parent.parent.parent / "docling_models",
+        Path.cwd() / "backend" / "docling_models",
         Path.cwd() / "docling_models",
         Path("/app/docling_models"),
-    ]:
-        if candidate.exists() and any(candidate.iterdir()):
-            return candidate
+    ]
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_dir():
+            try:
+                if any(candidate.iterdir()):
+                    logger.info("Prioritizing local Docling models from: %s", candidate)
+                    return candidate
+            except Exception:
+                pass
+    logger.info("No local docling_models folder found — Docling will load default/cached weights")
     return None
 
 
