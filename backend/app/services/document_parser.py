@@ -227,33 +227,18 @@ def parse_document(
         return _parse_pdf_fast(path, doc_id, on_progress=on_progress, prescan=prescan)
 
 
-def _has_digital_text(path: Optional[Path]) -> bool:
-    if not path or not path.exists():
-        return False
-    try:
-        import fitz
-        doc = fitz.open(str(path))
-        text_pages = sum(1 for page in doc if len((page.get_text() or "").strip()) > 30)
-        has_text = text_pages >= max(1, int(len(doc) * 0.5))
-        doc.close()
-        return has_text
-    except Exception:
-        return False
-
-
 def _resolve_do_ocr(path: Optional[Path]) -> bool:
     """OCR decision. settings.DOCLING_DO_OCR is the master switch.
-    If the PDF already has a rich digital text layer, CPU pixel OCR is bypassed
-    so parsing completes in seconds instead of minutes."""
+
+    OCR is honoured whenever enabled — we do NOT skip it based on a text-layer
+    probe. A doc-average "has text layer" heuristic silently dropped real tables:
+    a page whose tables are baked into a rendered graphic (e.g. a designed
+    newsletter) carries enough title/header text to look text-based, yet its
+    table CELLS need OCR. Without it Docling returns 0×0 grids and the tables
+    vanish. Correctness (every table extracted) beats the parse-time saving."""
     from app.config import settings
-    if not getattr(settings, "DOCLING_DO_OCR", False):
-        return False
 
-    if _has_digital_text(path):
-        logger.info("PDF %s contains native digital text — bypassing CPU OCR for fast parsing", getattr(path, "name", ""))
-        return False
-
-    return True
+    return bool(settings.DOCLING_DO_OCR)
 
 
 def _resolve_local_artifacts_path() -> Optional[Path]:
@@ -1013,12 +998,12 @@ def _parse_with_docling(path: Path, doc_id: str) -> ParsedDocument:
 
 
 def _adaptive_chunk_size(total_pages: int) -> int:
-    """Pages per Docling convert. Small docs → 1 (finest progress); large docs
-    grow the chunk so we stay at ~25–40 progress updates while capping memory
-    at ≤8 pages in flight. 5p→1, 50p→2, 200p→8, 1000p→8."""
-    if total_pages <= 1:
-        return 1
-    return max(1, min(8, math.ceil(total_pages / 25)))
+    """Pages per Docling convert pass.
+    For small/medium documents (<=10 pages), convert all pages in a single batched pass.
+    For larger documents (>10 pages), process in 10-page chunks."""
+    if total_pages <= 10:
+        return max(1, total_pages)
+    return 10
 
 
 def _merge_pages(total: int, real: dict, prescan: Optional[list]) -> list[dict]:

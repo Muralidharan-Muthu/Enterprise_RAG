@@ -166,52 +166,11 @@ class Settings(BaseSettings):
     CHUNK_ENRICH_BATCH_SIZE: int = 8
 
     # ── Docling parsing ───────────────────────────────────────
-    # OCR is the dominant parsing cost (~180s for a 5-page image/table-heavy
-    # PDF on CPU). Keep it on for scanned docs; set DOCLING_DO_OCR=false to
-    # parse text-layer PDFs in seconds. images_scale trades crop quality for
-    # render speed (2.0 = sharp but slow, 1.0 = fast).
-    DOCLING_DO_OCR: bool = True
-    DOCLING_DO_TABLE_STRUCTURE: bool = True
-    DOCLING_IMAGES_SCALE: float = 2.0
-
-    # ── Image pre-filter (before the VLM) ─────────────────────
-    # A cheap PIL/numpy pipeline decides SKIP / OCR_ONLY / VLM_PROCESSED so the
-    # expensive VLM (and OCR) is not run on junk (logos, icons, blanks,
-    # separators, duplicates). Fail-open: any error defaults to VLM_PROCESSED so
-    # an informative image is never dropped by a filter bug. Tunable thresholds:
-    PREFILTER_ENABLED: bool = True
-    PREFILTER_MIN_DIM: int = 24            # px; smaller on either side -> tiny -> skip
-    PREFILTER_MIN_AREA: int = 1600         # px^2 (40x40); below -> tiny -> skip
-    PREFILTER_BLANK_STD: float = 6.0       # grayscale std below -> blank -> skip
-    PREFILTER_SEPARATOR_ASPECT: float = 12.0   # max/min dim above + thin -> separator
-    PREFILTER_SEPARATOR_THIN_DIM: int = 40     # px; short side of a wide separator bar
-                                               # (> MIN_DIM so it isn't pre-empted by 'tiny')
-    PREFILTER_DUP_HAMMING: int = 5         # aHash hamming distance <= this -> duplicate
-    # Pre-OCR decorative-icon detection (Stage 1) — saves the OCR pass too, not just
-    # the VLM call. Deliberately MORE conservative than the post-OCR icon rule
-    # (smaller area) because here we cannot confirm "no text" via OCR. Real charts/
-    # tables are far larger, so a very small area is a high-confidence decorative
-    # signal on its own.
-    PREFILTER_VERY_SMALL_AREA: int = 6000      # px^2 (~77x77); below -> obvious icon (no OCR)
-    PREFILTER_LOWCOMPLEXITY_EDGE: float = 0.01 # near-flat graphic: almost no edges ...
-    PREFILTER_LOWCOMPLEXITY_COLORS: int = 6    # ... and very few colours -> skip pre-OCR
-    # Decorative icon/logo = SMALL + (almost) no text. Real charts/tables are far
-    # larger (tens of thousands to millions of px^2) and carry axis/cell text, so
-    # area+OCR separate them cleanly. Colour count is NOT used: real rasterised
-    # icons are antialiased/gradient-filled and can have MANY colours.
-    PREFILTER_ICON_MAX_AREA: int = 10000   # px^2 (~100x100); above this -> not a decorative icon
-    PREFILTER_ICON_MAX_OCR_CHARS: int = 6  # decorative icon carries ~no text
-    PREFILTER_LOWINFO_MAX_OCR_CHARS: int = 8   # low-info skip: almost no text ...
-    PREFILTER_LOWINFO_MAX_EDGE: float = 0.02   # ... and almost no structure ...
-    PREFILTER_LOWINFO_MAX_COLORS: int = 16     # ... and few colors
-    PREFILTER_TEXT_MIN_OCR_CHARS: int = 12     # OCR_ONLY: real text, no visual structure
-
-    # ── Document Parsing Engine ───────────────────────────────
-    # Uses Docling with local offline model artifacts stored in backend/docling_models/
-    DOCLING_ENABLED: bool = True
-    DOCLING_DO_OCR: bool = True
+    # OCR is set to False for fast digital PDF parsing; images_scale=1.0 for fast CPU rendering.
+    DOCLING_DO_OCR: bool = False
     DOCLING_DO_TABLE_STRUCTURE: bool = True
     DOCLING_IMAGES_SCALE: float = 1.0
+    DOCLING_ENABLED: bool = True
     XLSX_MAX_ROWS_PER_SHEET: int = 10000
 
     # ── Ingestion safety & performance (A+B) ──────────────────
