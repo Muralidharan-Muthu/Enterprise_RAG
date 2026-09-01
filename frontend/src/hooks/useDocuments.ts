@@ -37,12 +37,12 @@ export function usePipeline(runId: string | null) {
     queryKey: ["pipeline", runId],
     queryFn: () => apiClient.getPipeline(runId!),
     enabled: !!runId,
-    // Poll fast while running so per-page word/table/image counts climb in
-    // near real-time as the worker finishes each page (it writes stage_detail
-    // after every page chunk). Idle once terminal.
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 4000),
+    // Poll smoothly every 2s while running without hammering single-process CPU
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      return status === "running" ? 1000 : false;
+      return status === "running" ? 2000 : false;
     },
     refetchIntervalInBackground: true,
   });

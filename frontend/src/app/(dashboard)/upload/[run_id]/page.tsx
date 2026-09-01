@@ -89,7 +89,7 @@ export default function PipelineDetailPage() {
   const { run_id } = useParams<{ run_id: string }>();
   const { data: run, isLoading, isError } = usePipeline(run_id);
 
-  if (isLoading) {
+  if (isLoading && !run) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
@@ -97,13 +97,17 @@ export default function PipelineDetailPage() {
     );
   }
 
-  if (isError || !run) {
+  if (!run && isError) {
     return (
       <div className="max-w-4xl mx-auto mt-16 text-center text-gray-500 dark:text-gray-400">
         <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-red-400" />
         Pipeline run not found.
       </div>
     );
+  }
+
+  if (!run) {
+    return null;
   }
 
   const totalDuration = run.documents.reduce(

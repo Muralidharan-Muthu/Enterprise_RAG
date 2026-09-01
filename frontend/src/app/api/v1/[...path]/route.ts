@@ -31,6 +31,7 @@ async function handleProxy(req: NextRequest, context: { params: Promise<{ path: 
       headers,
       body,
       cache: "no-store",
+      signal: AbortSignal.timeout(12000),
     });
 
     const contentType = upstreamRes.headers.get("content-type") || "";
