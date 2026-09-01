@@ -21,6 +21,14 @@ import tempfile
 from pathlib import Path
 from typing import Callable, Optional
 
+# Optimize PyTorch CPU parallelism for fast Docling neural layout & table inference
+try:
+    import torch
+    _threads = max(1, min(8, os.cpu_count() or 4))
+    torch.set_num_threads(_threads)
+except Exception:
+    pass
+
 from app.core.exceptions import ParsingError
 from app.models.document import (
     BoundingBox,
