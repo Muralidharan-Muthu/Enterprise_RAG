@@ -76,6 +76,9 @@ async def lifespan(app: FastAPI):
                 )
             else:
                 logger.info("Hybrid keyword search: all tsvector columns present.")
+        except Exception as _tsv_exc:
+            logger.warning("tsvector column verification failed (non-fatal): %s", _tsv_exc)
+
     # Pre-warm Docling neural models in a background thread so first document parse is instant
     def _warmup_docling():
         try:
