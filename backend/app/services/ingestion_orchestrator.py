@@ -331,21 +331,53 @@ def ingest_document(self, document_id: str, storage_path: str, job_id: str) -> d
         from app.services.embedding_service import embed_passages
         import numpy as np
 
-        clause_embeddings = None
-        if legal_clauses:
-            clause_texts = [c.clause_text for c in legal_clauses]
-            clause_embeddings = embed_passages(clause_texts) if clause_texts else np.empty((0, 1024), dtype="float32")
+        clause_texts = [c.clause_text for c in (legal_clauses or [])]
+        prose_texts = [c.chunk_text for c in (chunks or [])]
 
-        if chunks:
-            prose_texts = [c.chunk_text for c in chunks]
-            embeddings = embed_passages(prose_texts) if prose_texts else np.empty((0, 1024), dtype="float32")
+        table_child_chunks: list = []
+        parent_summary_texts: list = []
+        child_texts: list = []
+        if parsed_doc.tables:
+            from app.services.table_chunker import chunk_tables
+            from app.config import settings as _cfg
+
+            raw_child_chunks, parent_summary_texts = chunk_tables(
+                parsed_doc.tables,
+                max_tokens=_cfg.TABLE_CHUNK_MAX_TOKENS,
+                max_rows=_cfg.TABLE_CHUNK_MAX_ROWS,
+                overlap_rows=_cfg.TABLE_CHUNK_OVERLAP_ROWS,
+                max_windows_per_table=_cfg.TABLE_MAX_WINDOWS_PER_TABLE,
+            )
+            _big_idx = {
+                t.table_index for t in parsed_doc.tables
+                if len(t.rows) > _cfg.TABLE_CHUNK_MAX_ROWS
+            }
+            table_child_chunks = [
+                c for c in raw_child_chunks if c.table_index in _big_idx
+            ]
+            if table_child_chunks:
+                child_texts = [c.serialized_text for c in table_child_chunks]
+                logger.info(
+                    "[%s] Table children: %d windows across %d tables",
+                    document_id, len(table_child_chunks), len(parsed_doc.tables),
+                )
+
+        # Single-pass batch embedding across all document assets
+        all_texts = clause_texts + prose_texts + parent_summary_texts + child_texts
+        if all_texts:
+            all_embeddings = embed_passages(all_texts)
         else:
-            embeddings = np.empty((0, 1024), dtype="float32")
+            all_embeddings = np.empty((0, 1024), dtype="float32")
 
-        # Embed table summaries for ANY document with tables
-        table_embeddings, table_child_chunks, table_child_embeddings = _build_table_embeddings(
-            parsed_doc.tables, document_id,
-        )
+        n_clause = len(clause_texts)
+        n_prose = len(prose_texts)
+        n_summary = len(parent_summary_texts)
+        n_child = len(child_texts)
+
+        clause_embeddings = all_embeddings[0:n_clause] if n_clause else None
+        embeddings = all_embeddings[n_clause:n_clause + n_prose] if n_prose else np.empty((0, 1024), dtype="float32")
+        table_embeddings = all_embeddings[n_clause + n_prose:n_clause + n_prose + n_summary] if n_summary else np.empty((0, 1024), dtype="float32")
+        table_child_embeddings = all_embeddings[n_clause + n_prose + n_summary:] if n_child else np.empty((0, 1024), dtype="float32")
 
         stage_times["embedding"] = time.monotonic() - t0
         job_repo.update_job(

@@ -219,20 +219,8 @@ def parse_document(
     if ext != ".pdf":
         return _parse_non_pdf(path, doc_id)
 
-    # PDF: use fast zero-network parser if Docling is disabled (recommended default)
-    if not getattr(settings, "DOCLING_ENABLED", False):
-        return _parse_pdf_fast(path, doc_id, on_progress=on_progress, prescan=prescan)
-
-    # PDF: chunked Docling path with fallbacks.
-    try:
-        return parse_document_chunked(path, doc_id, prescan=prescan, on_progress=on_progress)
-    except Exception as exc:
-        logger.warning("Chunked parse failed for %s: %s — trying whole-doc Docling", path.name, exc)
-    try:
-        return _parse_with_docling(path, doc_id)
-    except Exception as exc:
-        logger.warning("Docling parse failed for %s: %s — using PyMuPDF fallback", path.name, exc)
-        return _parse_pdf_fast(path, doc_id, on_progress=on_progress, prescan=prescan)
+    # PDF: parse with Docling neural layout & table engine
+    return _parse_with_docling(path, doc_id, on_progress=on_progress, prescan=prescan)
 
 
 def _resolve_do_ocr(path: Optional[Path]) -> bool:
@@ -288,10 +276,11 @@ def _make_converter(do_ocr: Optional[bool] = None):
 
     from docling.document_converter import DocumentConverter, PdfFormatOption
     from docling.datamodel.base_models import InputFormat
-    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.datamodel.pipeline_options import PdfPipelineOptions, AcceleratorOptions, AcceleratorDevice
 
     local_artifacts = _resolve_local_artifacts_path()
 
+    num_cpus = max(1, os.cpu_count() or 4)
     pipeline_options = PdfPipelineOptions(
         do_ocr=ocr_flag,
         do_table_structure=settings.DOCLING_DO_TABLE_STRUCTURE,
@@ -299,6 +288,10 @@ def _make_converter(do_ocr: Optional[bool] = None):
         generate_picture_images=True,
         generate_table_images=True,
         images_scale=settings.DOCLING_IMAGES_SCALE,
+        accelerator_options=AcceleratorOptions(
+            num_threads=num_cpus,
+            device=AcceleratorDevice.AUTO,
+        ),
     )
     conv = DocumentConverter(
         format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
@@ -315,11 +308,12 @@ def _make_converter_multi():
     options) plus DOCX / PPTX / XLSX / HTML / MD using Docling defaults."""
     from docling.document_converter import DocumentConverter, PdfFormatOption
     from docling.datamodel.base_models import InputFormat
-    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.datamodel.pipeline_options import PdfPipelineOptions, AcceleratorOptions, AcceleratorDevice
 
     local_artifacts = _resolve_local_artifacts_path()
 
     from app.config import settings
+    num_cpus = max(1, os.cpu_count() or 4)
     pipeline_options = PdfPipelineOptions(
         do_ocr=settings.DOCLING_DO_OCR,
         do_table_structure=settings.DOCLING_DO_TABLE_STRUCTURE,
@@ -327,6 +321,10 @@ def _make_converter_multi():
         generate_picture_images=True,
         generate_table_images=True,
         images_scale=settings.DOCLING_IMAGES_SCALE,
+        accelerator_options=AcceleratorOptions(
+            num_threads=num_cpus,
+            device=AcceleratorDevice.AUTO,
+        ),
     )
     return DocumentConverter(
         allowed_formats=[
@@ -994,9 +992,13 @@ def _docling_metadata(doc) -> dict:
     return metadata
 
 
-def _parse_with_docling(path: Path, doc_id: str) -> ParsedDocument:
-    """Whole-document pass (single Docling convert). Fallback for the chunked
-    path; correct but no progress and unbounded memory on huge PDFs."""
+def _parse_with_docling(
+    path: Path,
+    doc_id: str,
+    on_progress: Optional[Callable[[int, int, list], None]] = None,
+    prescan: Optional[list] = None,
+) -> ParsedDocument:
+    """Whole-document pass (single Docling convert) with live progress emission."""
     converter = _make_converter(do_ocr=_resolve_do_ocr(path))
     doc = converter.convert(str(path)).document
 
@@ -1006,13 +1008,35 @@ def _parse_with_docling(path: Path, doc_id: str) -> ParsedDocument:
     tables = _reassign_table_captions(tables, text_blocks)
     raw_text = "\n\n".join(raw_parts)
 
+    page_count = len(doc.pages) if hasattr(doc, "pages") and doc.pages else 1
+
+    if on_progress:
+        pages_detail = []
+        for p in range(1, page_count + 1):
+            p_blocks = [b for b in text_blocks if b.page_number == p]
+            p_tables = [t for t in tables if t.page_number == p]
+            p_images = [img for img in images if img.page_number == p]
+            p_words = sum(b.token_count or len(b.text.split()) for b in p_blocks)
+            pages_detail.append({
+                "page": p,
+                "blocks": len(p_blocks),
+                "tables": len(p_tables),
+                "images": len(p_images),
+                "est_words": p_words,
+                "done": True,
+            })
+        try:
+            on_progress(page_count, page_count, pages_detail)
+        except Exception as pe:
+            logger.debug("[%s] progress callback error: %s", doc_id, pe)
+
     return ParsedDocument(
         doc_id=doc_id,
         filename=path.name,
         raw_text=raw_text,
         text_blocks=text_blocks,
         tables=tables,
-        page_count=len(doc.pages) if hasattr(doc, "pages") else 1,
+        page_count=page_count,
         word_count=len(raw_text.split()),
         has_tables=len(tables) > 0,
         has_images=len(image_pages) > 0,

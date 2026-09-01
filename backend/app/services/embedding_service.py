@@ -6,8 +6,17 @@ IMPORTANT: Initialize at module level so the Celery worker loads the model once
 on startup (~1.3GB download on first run). Never instantiate inside a task function.
 """
 import logging
+import os
 
 import numpy as np
+
+# Optimize PyTorch CPU parallelism for fast BGE vector encoding
+try:
+    import torch
+    _num_threads = max(1, os.cpu_count() or 4)
+    torch.set_num_threads(_num_threads)
+except Exception:
+    pass
 
 from app.config import settings
 
@@ -24,9 +33,15 @@ _model = None
 def _get_model():
     global _model
     if _model is None:
+        try:
+            import torch
+            torch.set_num_threads(max(1, os.cpu_count() or 4))
+        except Exception:
+            pass
         from sentence_transformers import SentenceTransformer
         logger.info("Loading BGE embedding model: %s (device=%s)", settings.BGE_MODEL_NAME, settings.EMBEDDING_DEVICE)
         _model = SentenceTransformer(settings.BGE_MODEL_NAME, device=settings.EMBEDDING_DEVICE)
+        _model.eval()
         logger.info("BGE model loaded.")
     return _model
 
