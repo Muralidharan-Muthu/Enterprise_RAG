@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const BACKEND =
   process.env.NEXT_PUBLIC_API_URL ||
-  "https://multi-store-rag-chatbot-production.up.railway.app";
+  "http://localhost:8000";
 
 export const dynamic = "force-dynamic";
 
