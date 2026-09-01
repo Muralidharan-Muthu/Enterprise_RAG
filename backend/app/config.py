@@ -209,9 +209,9 @@ class Settings(BaseSettings):
     # ── Document Parsing Engine ───────────────────────────────
     # Uses Docling with local offline model artifacts stored in backend/docling_models/
     DOCLING_ENABLED: bool = True
-    DOCLING_DO_OCR: bool = False
+    DOCLING_DO_OCR: bool = True
     DOCLING_DO_TABLE_STRUCTURE: bool = True
-    DOCLING_IMAGES_SCALE: float = 2.0
+    DOCLING_IMAGES_SCALE: float = 1.0
     XLSX_MAX_ROWS_PER_SHEET: int = 10000
 
     # ── Ingestion safety & performance (A+B) ──────────────────

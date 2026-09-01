@@ -227,18 +227,33 @@ def parse_document(
         return _parse_pdf_fast(path, doc_id, on_progress=on_progress, prescan=prescan)
 
 
+def _has_digital_text(path: Optional[Path]) -> bool:
+    if not path or not path.exists():
+        return False
+    try:
+        import fitz
+        doc = fitz.open(str(path))
+        text_pages = sum(1 for page in doc if len((page.get_text() or "").strip()) > 30)
+        has_text = text_pages >= max(1, int(len(doc) * 0.5))
+        doc.close()
+        return has_text
+    except Exception:
+        return False
+
+
 def _resolve_do_ocr(path: Optional[Path]) -> bool:
     """OCR decision. settings.DOCLING_DO_OCR is the master switch.
-
-    OCR is honoured whenever enabled — we do NOT skip it based on a text-layer
-    probe. A doc-average "has text layer" heuristic silently dropped real tables:
-    a page whose tables are baked into a rendered graphic (e.g. a designed
-    newsletter) carries enough title/header text to look text-based, yet its
-    table CELLS need OCR. Without it Docling returns 0×0 grids and the tables
-    vanish. Correctness (every table extracted) beats the parse-time saving."""
+    If the PDF already has a rich digital text layer, CPU pixel OCR is bypassed
+    so parsing completes in seconds instead of minutes."""
     from app.config import settings
+    if not getattr(settings, "DOCLING_DO_OCR", False):
+        return False
 
-    return bool(settings.DOCLING_DO_OCR)
+    if _has_digital_text(path):
+        logger.info("PDF %s contains native digital text — bypassing CPU OCR for fast parsing", getattr(path, "name", ""))
+        return False
+
+    return True
 
 
 def _resolve_local_artifacts_path() -> Optional[Path]:
