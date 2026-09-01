@@ -58,7 +58,7 @@ def _parse_pdf_fast(
     Extracts text blocks, paragraphs, tables, images, and coordinates in <1s.
     Fires on_progress after each page so the UI displays live real-time progress."""
     import fitz  # PyMuPDF
-
+    path = Path(path)
     doc = fitz.open(str(path))
     total = len(doc)
     all_blocks: list[TextBlock] = []
@@ -1015,12 +1015,12 @@ def _parse_with_docling(path: Path, doc_id: str) -> ParsedDocument:
 
 
 def _adaptive_chunk_size(total_pages: int) -> int:
-    """Pages per Docling convert pass.
-    For small/medium documents (<=10 pages), convert all pages in a single batched pass.
-    For larger documents (>10 pages), process in 10-page chunks."""
-    if total_pages <= 10:
-        return max(1, total_pages)
-    return 10
+    """Pages per Docling convert pass. Small docs (<=5 pages) use 1 page per chunk
+    so the live UI gets immediate progress updates after every single page.
+    Larger docs batch up to 4-8 pages per chunk for throughput."""
+    if total_pages <= 5:
+        return 1
+    return max(1, min(8, math.ceil(total_pages / 20)))
 
 
 def _merge_pages(total: int, real: dict, prescan: Optional[list]) -> list[dict]:
