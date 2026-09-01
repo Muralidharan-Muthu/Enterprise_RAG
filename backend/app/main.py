@@ -45,44 +45,48 @@ async def lifespan(app: FastAPI):
     loop.set_default_executor(pool)
     logger.info("Query thread pool ready (%d threads pre-created)", _QUERY_THREAD_POOL_SIZE)
 
-    # Ensure Neo4j GraphRAG schema (constraints + indexes) on startup.
-    # Idempotent: no-op when graph is disabled or unavailable.
-    if settings.NEO4J_ENABLED:
-        try:
-            from app.services import graph_service
-            graph_service.ensure_schema()
-            logger.info("Neo4j GraphRAG schema initialization attempted")
-        except Exception as _schema_exc:
-            logger.warning("Neo4j schema init failed (non-fatal): %s", _schema_exc)
+    # Pre-initialize Postgres DB pool so early HTTP requests never block
+    try:
+        from app.db.connection import get_pool
+        get_pool()
+    except Exception as _pool_exc:
+        logger.warning("Eager DB pool init failed (will retry on demand): %s", _pool_exc)
 
-    # Verify the full-text (tsvector) columns the keyword half of hybrid search
-    # depends on. Without migration 011, keyword_search() silently no-ops and
-    # hybrid retrieval quietly degrades to semantic-only — surface that loudly.
-    # Only checked when keyword search can actually run on the query path.
-    _keyword_active = settings.HYBRID_SEARCH_ENABLED and (
-        settings.HYBRID_IN_CLASSIC_PATH or settings.AGENTIC_RAG_ENABLED
-    )
-    if _keyword_active:
-        try:
-            from app.services import hybrid_search_service
-            missing = hybrid_search_service.verify_fulltext_columns()
-            if missing:
-                logger.warning(
-                    "HYBRID SEARCH DEGRADED: full-text tsvector columns missing (%s). "
-                    "Keyword retrieval is INACTIVE — hybrid search is running "
-                    "semantic-only. Apply migration 011_fulltext_search.sql in "
-                    "Supabase to enable the keyword half.",
-                    ", ".join(missing),
-                )
-            else:
-                logger.info("Hybrid keyword search: all tsvector columns present.")
-        except Exception as _tsv_exc:
-            logger.warning("tsvector column verification failed (non-fatal): %s", _tsv_exc)
+    # Background async initialization for remote services (Neo4j, fulltext check, Docling)
+    # This prevents blocking the FastAPI lifespan event so Next.js never encounters 502 Bad Gateway
+    def _async_startup_tasks():
+        import time
+        # 1. Neo4j GraphRAG schema
+        if settings.NEO4J_ENABLED:
+            try:
+                from app.services import graph_service
+                graph_service.ensure_schema()
+            except Exception as _schema_exc:
+                logger.warning("Neo4j schema init failed (non-fatal): %s", _schema_exc)
 
-    # Pre-warm Docling neural models in a background thread so first document parse is instant
-    def _warmup_docling():
+        # 2. Hybrid search tsvector verification
+        _keyword_active = settings.HYBRID_SEARCH_ENABLED and (
+            settings.HYBRID_IN_CLASSIC_PATH or settings.AGENTIC_RAG_ENABLED
+        )
+        if _keyword_active:
+            try:
+                from app.services import hybrid_search_service
+                missing = hybrid_search_service.verify_fulltext_columns()
+                if missing:
+                    logger.warning(
+                        "HYBRID SEARCH DEGRADED: full-text tsvector columns missing (%s). "
+                        "Keyword retrieval is INACTIVE — hybrid search is running "
+                        "semantic-only. Apply migration 011_fulltext_search.sql in "
+                        "Supabase to enable the keyword half.",
+                        ", ".join(missing),
+                    )
+                else:
+                    logger.info("Hybrid keyword search: all tsvector columns present.")
+            except Exception as _tsv_exc:
+                logger.warning("tsvector column verification failed (non-fatal): %s", _tsv_exc)
+
+        # 3. Pre-warm Docling neural models
         try:
-            import time
             time.sleep(2)
             from app.services.document_parser import _make_converter
             _make_converter(do_ocr=False)
@@ -91,7 +95,7 @@ async def lifespan(app: FastAPI):
             logger.warning("Docling warmup skipped: %s", wex)
 
     import threading
-    threading.Thread(target=_warmup_docling, daemon=True, name="docling-warmup").start()
+    threading.Thread(target=_async_startup_tasks, daemon=True, name="bg-startup-tasks").start()
 
     # Auto-recover any jobs stuck in queued/uploaded state on server startup
     def _recover_stuck_jobs():

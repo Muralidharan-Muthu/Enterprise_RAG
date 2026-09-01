@@ -277,25 +277,30 @@ def ingest_document(self, document_id: str, storage_path: str, job_id: str) -> d
         legal_clauses = clause_list if clause_list else None
 
         # Fallback: if document was classified as legal or has legal aspects, but chunking found no clauses,
-        # run extract_clauses_groq
+        # run extract_clauses
         if router_result.has_type("legal") and not legal_clauses:
-            from app.services.groq_clause_extractor import extract_clauses_groq
-            job_repo.update_job(job_id, "chunking", progress=30)
-            legal_clauses, _extraction_meta = extract_clauses_groq(parsed_doc)
-            logger.info(
-                "[%s] Clause extraction fallback: %d clauses, source=%s%s",
-                document_id, len(legal_clauses), _extraction_meta.source,
-                f" (fallback: {_extraction_meta.fallback_reason})"
-                if _extraction_meta.fallback_reason else "",
-            )
-            if _extraction_meta.source == "regex" and legal_clauses:
-                try:
-                    from app.services.clause_enrichment_service import enrich_clauses_batch
-                    job_repo.update_job(job_id, "chunking", progress=70)
-                    legal_clauses = enrich_clauses_batch(legal_clauses)
-                    logger.info("[%s] Enriched %d regex clauses", document_id, len(legal_clauses))
-                except Exception as _enr_exc:
-                    logger.warning("[%s] Clause enrichment failed (non-fatal): %s", document_id, _enr_exc)
+            if getattr(settings, "CHUNK_ENRICH_WITH_GROQ", False):
+                from app.services.groq_clause_extractor import extract_clauses_groq
+                job_repo.update_job(job_id, "chunking", progress=30)
+                legal_clauses, _extraction_meta = extract_clauses_groq(parsed_doc)
+                logger.info(
+                    "[%s] Clause extraction fallback: %d clauses, source=%s%s",
+                    document_id, len(legal_clauses), _extraction_meta.source,
+                    f" (fallback: {_extraction_meta.fallback_reason})"
+                    if _extraction_meta.fallback_reason else "",
+                )
+                if _extraction_meta.source == "regex" and legal_clauses:
+                    try:
+                        from app.services.clause_enrichment_service import enrich_clauses_batch
+                        job_repo.update_job(job_id, "chunking", progress=70)
+                        legal_clauses = enrich_clauses_batch(legal_clauses)
+                        logger.info("[%s] Enriched %d regex clauses", document_id, len(legal_clauses))
+                    except Exception as _enr_exc:
+                        logger.warning("[%s] Clause enrichment failed (non-fatal): %s", document_id, _enr_exc)
+            else:
+                from app.services.chunker import extract_legal_clauses
+                legal_clauses = extract_legal_clauses(parsed_doc)
+                logger.info("[%s] Fast regex clause extraction: %d clauses", document_id, len(legal_clauses))
 
         # Reconcile document types if clauses were discovered in a document not originally labeled as legal
         if legal_clauses and not router_result.has_type("legal"):

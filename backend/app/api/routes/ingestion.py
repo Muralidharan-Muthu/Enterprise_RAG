@@ -137,7 +137,17 @@ def _register_and_dispatch(
                 (job_id, document_id),
             )
 
-    # Always launch in-process background thread so ingestion executes immediately in container
+    # Dispatch to Celery staged pipeline queue (parse -> embed/store)
+    if getattr(settings, "INGESTION_STAGED_ENABLED", True):
+        try:
+            from app.services.ingestion_tasks import dispatch_ingestion
+            dispatch_ingestion(document_id, storage_path, job_id)
+            logger.info("Dispatched staged ingestion chain for doc %s (job %s)", document_id, job_id)
+            return document_id, job_id
+        except Exception as exc:
+            logger.warning("Celery staged dispatch failed (%s) — falling back to background runner", exc)
+
+    # Fallback to local background thread if Celery/Redis is not running
     import threading
     from app.services.ingestion_orchestrator import ingest_document
 
@@ -150,25 +160,6 @@ def _register_and_dispatch(
             logger.error("Background ingestion failed for %s: %s", document_id, bg_err, exc_info=True)
 
     threading.Thread(target=_bg_run, daemon=True, name=f"ingest-{document_id}").start()
-
-    # Also best-effort notify Celery if a worker is active
-    try:
-        from app.core.background_tasks import celery_app
-        task = celery_app.send_task(
-            "app.services.ingestion_orchestrator.ingest_document",
-            args=[document_id, storage_path, job_id],
-            task_id=job_id,
-            queue="ingestion",
-        )
-        with get_db() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "UPDATE multi_store_rag_working.ingestion_jobs SET celery_task_id = %s WHERE id = %s",
-                    (task.id, job_id),
-                )
-    except Exception as exc:
-        logger.info("Celery broker notification skipped (%s) — running via in-process background thread", exc)
-
     return document_id, job_id
 
 

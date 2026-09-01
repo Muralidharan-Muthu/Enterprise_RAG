@@ -152,9 +152,8 @@ class Settings(BaseSettings):
     MIN_CHUNK_SIZE_TOKENS: int = 50
 
     # ── Semantic chunking (LlamaIndex-style breakpoint detection) ─────────────
-    # Master toggle — False restores the old fixed-size sentence-overlap path.
-    # Defaults MUST be present so a missing .env key never kills worker boot.
-    CHUNK_USE_SEMANTIC: bool = True
+    # Master toggle — False uses the fast sentence-boundary section-preserving path (sub-second chunking).
+    CHUNK_USE_SEMANTIC: bool = False
     # Cosine-distance percentile above which a sentence boundary becomes a chunk
     # break.  95 = cut only the top 5 % most dissimilar consecutive sentences.
     CHUNK_SEMANTIC_BREAKPOINT_PERCENTILE: int = 95
@@ -164,6 +163,8 @@ class Settings(BaseSettings):
     # How many chunks to send to Groq per enrichment call.  Larger batches
     # reduce API round-trips; smaller batches lower per-call latency variance.
     CHUNK_ENRICH_BATCH_SIZE: int = 8
+    # Enable Groq LLM chunk & clause enrichment during chunking (False by default to avoid 429 rate limit delays and ensure sub-second chunking)
+    CHUNK_ENRICH_WITH_GROQ: bool = False
 
     # ── Docling parsing ───────────────────────────────────────
     # OCR is set to False for fast digital PDF parsing; images_scale=1.0 for fast CPU rendering.
@@ -175,9 +176,8 @@ class Settings(BaseSettings):
 
     # ── Ingestion safety & performance (A+B) ──────────────────
     # Real BGE tokenizer for chunk token counts instead of whitespace word-count.
-    # False restores the old len(text.split()) approximation. When True, chunkers
-    # count/limit by the actual BGE subword tokenizer so CHUNK_MAX_TOKENS truly holds.
-    CHUNK_USE_REAL_TOKENIZER: bool = True
+    # False restores the fast len(text.split()) approximation without loading PyTorch in memory.
+    CHUNK_USE_REAL_TOKENIZER: bool = False
     # Max characters of OCR text appended to the VLM prompt. Unbounded OCR could
     # overflow the model context and silently truncate the useful instructions.
     VLM_OCR_MAX_CHARS: int = 8000

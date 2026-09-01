@@ -326,45 +326,14 @@ def delete_document(document_id: str):
     storage_path = row[1]
     bucket = row[2] or "rag-documents"
 
-    # 1. Delete explicit asset paths from image_store (if any)
-    if image_rows:
-        by_bucket: dict[str, list[str]] = {}
-        for p, b in image_rows:
-            if p:
-                by_bucket.setdefault(b or bucket, []).append(p)
-        for bkt, paths in by_bucket.items():
-            try:
-                delete_files(bkt, paths)
-            except Exception as exc:
-                logger.warning("Could not delete asset files from bucket %s for document %s: %s", bkt, document_id, exc)
-
-    # 2. Comprehensively delete all folders and files for this document from Supabase Storage:
-    #    - documents/<safe_name>.pdf (original file)
-    #    - images/<document_id>/* (all figure crops)
-    #    - tables/<document_id>/* (all table crops)
-    #    - staging/<document_id>/* (all staged payloads)
-    try:
-        delete_all_document_storage(document_id, storage_path=storage_path, bucket=bucket)
-        logger.info("Deleted all Supabase Storage folders and assets for document %s", document_id)
-    except Exception as exc:
-        logger.warning("Storage folder cleanup error for %s: %s", document_id, exc)
-
-    # 3. Clear Neo4j graph data for this document
-    try:
-        graph_service.clear_document_graph(document_id)
-        from app.services.graph_build_service import _signal_community_recompute
-        _signal_community_recompute(document_id)
-    except Exception as exc:
-        logger.warning("Failed to clear graph data or signal community recompute for %s: %s", document_id, exc)
-
-    # 4. Invalidate retrieval and query caches
+    # 1. Invalidate retrieval and query caches immediately
     try:
         from app.services import retrieval_cache
         retrieval_cache.clear_all()
     except Exception as exc:
         logger.debug("Could not clear retrieval cache: %s", exc)
 
-    # 5. Delete DB row — FK ON DELETE CASCADE cleans all child tables:
+    # 2. Delete PostgreSQL record immediately — FK ON DELETE CASCADE cleans all child tables:
     #    (vector_store, table_store, table_row_store, clause_store, image_store, parse_staging, ingestion_jobs)
     with get_db() as conn:
         with conn.cursor() as cur:
@@ -373,7 +342,46 @@ def delete_document(document_id: str):
                 (document_id,),
             )
 
-    logger.info("Successfully cascade-deleted document %s and all associated storage/database assets", document_id)
+    # 3. Offload remote cloud storage purging (Supabase S3) and Neo4j graph cleanup to background thread
+    #    to prevent HTTP 502 / proxy timeouts on slow external networks.
+    import threading
+
+    def _bg_cleanup(doc_id: str, st_path: str, bkt: str, img_rows: list):
+        try:
+            # Delete explicit image assets
+            if img_rows:
+                by_bkt: dict[str, list[str]] = {}
+                for p, b in img_rows:
+                    if p:
+                        by_bkt.setdefault(b or bkt, []).append(p)
+                for b_name, paths in by_bkt.items():
+                    try:
+                        delete_files(b_name, paths)
+                    except Exception as e:
+                        logger.warning("Could not delete asset files from %s for %s: %s", b_name, doc_id, e)
+
+            # Delete all folders (images, tables, staging, original doc)
+            delete_all_document_storage(doc_id, storage_path=st_path, bucket=bkt)
+            logger.info("Deleted all Supabase Storage folders and assets for document %s", doc_id)
+
+            # Clear Neo4j graph data
+            try:
+                graph_service.clear_document_graph(doc_id)
+                from app.services.graph_build_service import _signal_community_recompute
+                _signal_community_recompute(doc_id)
+            except Exception as g_exc:
+                logger.warning("Graph cleanup warning for %s: %s", doc_id, g_exc)
+        except Exception as bg_exc:
+            logger.error("Background storage/graph cleanup failed for %s: %s", doc_id, bg_exc)
+
+    threading.Thread(
+        target=_bg_cleanup,
+        args=(document_id, storage_path, bucket, image_rows),
+        daemon=True,
+        name=f"cleanup-{document_id}",
+    ).start()
+
+    logger.info("Successfully cascade-deleted document %s and scheduled cloud storage/graph purge", document_id)
     return {"deleted": True, "document_id": document_id}
 
 

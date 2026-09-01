@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Upload,
@@ -26,6 +27,7 @@ interface StagedFile {
 
 export default function UploadPage() {
   const qc = useQueryClient();
+  const router = useRouter();
 
   const [source, setSource] = useState<PipelineSource>("local");
   const [pipelineName, setPipelineName] = useState("");
@@ -72,6 +74,9 @@ export default function UploadPage() {
       setDescription("");
       qc.invalidateQueries({ queryKey: ["pipelines"] });
       qc.invalidateQueries({ queryKey: ["documents"] });
+      if (res.pipeline_run_id) {
+        router.push(`/upload/${res.pipeline_run_id}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Pipeline creation failed");
     } finally {
@@ -123,7 +128,7 @@ export default function UploadPage() {
             ))}
           </div>
           <span className="text-[11px] font-mono text-slate-400 dark:text-slate-400">
-            PDF • XLSX • DOCX • CSV
+            PDF
           </span>
         </div>
 

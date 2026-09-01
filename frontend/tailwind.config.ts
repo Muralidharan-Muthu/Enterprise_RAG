@@ -46,6 +46,9 @@ const config: Config = {
           surface: "hsl(var(--brand-surface))",
         },
       },
+      fontFamily: {
+        sans: ["var(--font-poppins)", "Poppins", "system-ui", "-apple-system", "sans-serif"],
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",

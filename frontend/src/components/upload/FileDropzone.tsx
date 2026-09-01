@@ -27,7 +27,7 @@ export function FileDropzone({ onFiles, disabled, maxSizeMB = 100 }: Props) {
             if (reason?.code === "file-too-large")
               return `${r.file.name} — exceeds ${maxSizeMB} MB`;
             if (reason?.code === "file-invalid-type")
-              return `${r.file.name} — unsupported format (PDF, DOCX, PPTX, XLSX, HTML, MD)`;
+              return `${r.file.name} — unsupported format (PDF only)`;
             return `${r.file.name} — ${reason?.message ?? "rejected"}`;
           })
         );
@@ -40,12 +40,6 @@ export function FileDropzone({ onFiles, disabled, maxSizeMB = 100 }: Props) {
     onDrop,
     accept: {
       "application/pdf": [".pdf"],
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation": [".pptx"],
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
-      "text/html": [".html", ".htm"],
-      "text/markdown": [".md"],
-      "text/plain": [".md"],
     },
     maxSize: maxSizeMB * 1024 * 1024,
     disabled,
@@ -71,11 +65,11 @@ export function FileDropzone({ onFiles, disabled, maxSizeMB = 100 }: Props) {
           </div>
           <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
             {isDragActive
-              ? "Drop files here to upload"
-              : "Drag & drop files, or click to browse"}
+              ? "Drop PDF files here to upload"
+              : "Drag & drop PDF files, or click to browse"}
           </p>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            PDF, DOCX, PPTX, XLSX, HTML, MD — up to {maxSizeMB} MB per file
+            PDF only — up to {maxSizeMB} MB per file
           </p>
         </div>
       </div>

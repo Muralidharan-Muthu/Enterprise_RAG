@@ -363,19 +363,26 @@ def _chunk_semantic_breakpoint(logical_units: list[_LogicalUnit]) -> list[Chunk]
     if not raw_chunks:
         return []
 
-    # ── Groq enrichment ───────────────────────────────────────────────────────
+    # ── Chunk enrichment ──────────────────────────────────────────────────────
     # Collect plain texts (no prefix) for the enrichment prompts.
     core_texts = [rc.text for rc in raw_chunks]
     section_paths = [rc.section_path for rc in raw_chunks]
     block_types_list = [rc.block_types for rc in raw_chunks]
 
-    enrichments = _sc.enrich_chunks_with_groq(
-        chunk_texts=core_texts,
-        section_paths=section_paths,
-        block_types_list=block_types_list,
-        groq_chat_fn=groq_client.chat,
-        batch_size=batch_size,
-    )
+    if getattr(settings, "CHUNK_ENRICH_WITH_GROQ", False):
+        enrichments = _sc.enrich_chunks_with_groq(
+            chunk_texts=core_texts,
+            section_paths=section_paths,
+            block_types_list=block_types_list,
+            groq_chat_fn=groq_client.chat,
+            batch_size=batch_size,
+        )
+    else:
+        enrichments = _sc._fallback_enrichment(
+            chunk_texts=core_texts,
+            section_paths=section_paths,
+            block_types_list=block_types_list,
+        )
 
     # ── Assemble final Chunk objects ──────────────────────────────────────────
     chunks: list[Chunk] = []
