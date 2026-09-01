@@ -280,8 +280,11 @@ def analyze_image(png_bytes: bytes, raw_ocr_text: str) -> dict:
         )
         full_prompt = _VLM_PROMPT + ocr_section
 
+        model_name = getattr(settings, "GROQ_VLM_MODEL", None) or "llama-3.2-11b-vision-preview"
+        timeout_seconds = getattr(settings, "VLM_TIMEOUT_SECONDS", 12.0)
+
         payload = {
-            "model": settings.GROQ_MODEL_NAME,
+            "model": model_name,
             "messages": [{
                 "role": "user",
                 "content": [
@@ -294,7 +297,7 @@ def analyze_image(png_bytes: bytes, raw_ocr_text: str) -> dict:
         }
 
         base = settings.GROQ_BASE_URL.rstrip("/")
-        with httpx.Client(timeout=settings.GROQ_TIMEOUT_SECONDS) as client:
+        with httpx.Client(timeout=timeout_seconds) as client:
             resp = client.post(f"{base}/chat/completions", json=payload, headers=headers)
             resp.raise_for_status()
 

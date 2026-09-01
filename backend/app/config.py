@@ -226,11 +226,13 @@ class Settings(BaseSettings):
     # the CDAC endpoint while still overlapping the per-image latency. 1 = sequential.
     VLM_MAX_CONCURRENCY: int = 4
     # Max output tokens for the per-image VLM extraction call (image_analysis_service).
-    # Kept separate from GROQ_MAX_TOKENS (used by query-answer synthesis, a different
-    # call site with different needs). GROQ_MAX_TOKENS's own comment notes 2048
-    # already caused ~3x latency on this backend — the image call previously hardcoded
-    # 4096, which measured at ~293s/image (24+ min for a 5-image document).
     VLM_MAX_TOKENS: int = 1536
+    # Groq Vision-Language Model for multimodal image analysis & table reconstruction
+    GROQ_VLM_MODEL: str = "llama-3.2-11b-vision-preview"
+    # Timeout in seconds for per-image VLM analysis (prevents pipeline stalling)
+    VLM_TIMEOUT_SECONDS: float = 12.0
+    # Flag to toggle VLM image extraction
+    VLM_ENABLED: bool = True
     # Run the VLM on Docling-extracted table crops (image + Docling text as OCR
     # evidence) to reconstruct a clean structured table — correct OCR errors,
     # recover missing values, rebuild merged cells. VLM output becomes authoritative
