@@ -224,7 +224,7 @@ def parse_document(
         return _parse_with_docling(path, doc_id)
     except Exception as exc:
         logger.warning("Docling parse failed for %s: %s — using PyMuPDF fallback", path.name, exc)
-        return _parse_fallback(path, doc_id)
+        return _parse_pdf_fast(path, doc_id, on_progress=on_progress, prescan=prescan)
 
 
 def _resolve_do_ocr(path: Optional[Path]) -> bool:
