@@ -388,6 +388,21 @@ def reprocess_document(document_id: str):
                 (job_id, document_id),
             )
 
+    # Always launch in-process background thread so reprocess executes immediately in container
+    import threading
+    from app.services.ingestion_orchestrator import ingest_document
+
+    def _bg_reprocess():
+        try:
+            logger.info("Starting background reprocess for doc %s (job %s)", document_id, job_id)
+            ingest_document.run(document_id, storage_path, job_id)
+            logger.info("Completed background reprocess for doc %s (job %s)", document_id, job_id)
+        except Exception as bg_err:
+            logger.error("Background reprocess failed for %s: %s", document_id, bg_err, exc_info=True)
+
+    threading.Thread(target=_bg_reprocess, daemon=True, name=f"reprocess-{document_id}").start()
+
+    # Also best-effort notify Celery
     try:
         from app.core.background_tasks import celery_app
         task = celery_app.send_task(
@@ -403,8 +418,7 @@ def reprocess_document(document_id: str):
                     (task.id, job_id),
                 )
     except Exception as exc:
-        logger.error("Failed to dispatch reprocess task for %s: %s", document_id, exc)
-        raise HTTPException(status_code=500, detail="Failed to dispatch ingestion task")
+        logger.info("Celery broker notification skipped (%s) — running via in-process background thread", exc)
 
     return {"document_id": document_id, "job_id": job_id, "pipeline_run_id": run_id, "status": "queued"}
 

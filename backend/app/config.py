@@ -321,7 +321,7 @@ class Settings(BaseSettings):
     # Master flag — False (default) keeps the original monolithic ingest_document
     # task so existing deployments are unaffected.  Set True to enable the
     # two-task chain (parse_document_task → chunk_embed_store_task).
-    INGESTION_STAGED_ENABLED: bool = True
+    INGESTION_STAGED_ENABLED: bool = False
     # Bucket for staging blobs.  Empty string → fall back to SUPABASE_STORAGE_BUCKET
     # so a single-bucket deployment works with zero extra config.
     PARSE_STAGING_BUCKET: str = ""
