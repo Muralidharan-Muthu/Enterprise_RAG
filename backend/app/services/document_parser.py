@@ -260,29 +260,46 @@ def _resolve_local_artifacts_path() -> Optional[Path]:
     return None
 
 
+_CACHED_CONVERTER = None
+_CACHED_CONVERTER_OCR = None
+
+
 def _make_converter(do_ocr: Optional[bool] = None):
-    """Build a Docling converter from settings. Models load once and the
-    converter is reused across page chunks (no per-chunk 1.3 GB reload).
+    """Build or return cached Docling converter from settings. Models load once
+    into memory and the converter is reused across all documents and chunks
+    with zero per-document reload latency.
 
     do_ocr overrides the OCR setting per document (see _resolve_do_ocr)."""
+    global _CACHED_CONVERTER, _CACHED_CONVERTER_OCR
+    from app.config import settings
+    ocr_flag = bool(settings.DOCLING_DO_OCR if do_ocr is None else do_ocr)
+    if ocr_flag and _CACHED_CONVERTER_OCR is not None:
+        return _CACHED_CONVERTER_OCR
+    if not ocr_flag and _CACHED_CONVERTER is not None:
+        return _CACHED_CONVERTER
+
     from docling.document_converter import DocumentConverter, PdfFormatOption
     from docling.datamodel.base_models import InputFormat
     from docling.datamodel.pipeline_options import PdfPipelineOptions
 
     local_artifacts = _resolve_local_artifacts_path()
 
-    from app.config import settings
     pipeline_options = PdfPipelineOptions(
-        do_ocr=settings.DOCLING_DO_OCR if do_ocr is None else do_ocr,
+        do_ocr=ocr_flag,
         do_table_structure=settings.DOCLING_DO_TABLE_STRUCTURE,
         artifacts_path=local_artifacts,
         generate_picture_images=True,
         generate_table_images=True,
         images_scale=settings.DOCLING_IMAGES_SCALE,
     )
-    return DocumentConverter(
+    conv = DocumentConverter(
         format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
     )
+    if ocr_flag:
+        _CACHED_CONVERTER_OCR = conv
+    else:
+        _CACHED_CONVERTER = conv
+    return conv
 
 
 def _make_converter_multi():

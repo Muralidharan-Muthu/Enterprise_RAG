@@ -76,8 +76,19 @@ async def lifespan(app: FastAPI):
                 )
             else:
                 logger.info("Hybrid keyword search: all tsvector columns present.")
-        except Exception as _tsv_exc:
-            logger.warning("tsvector column verification failed (non-fatal): %s", _tsv_exc)
+    # Pre-warm Docling neural models in a background thread so first document parse is instant
+    def _warmup_docling():
+        try:
+            import time
+            time.sleep(2)
+            from app.services.document_parser import _make_converter
+            _make_converter(do_ocr=False)
+            logger.info("Docling neural models pre-warmed in background thread successfully")
+        except Exception as wex:
+            logger.warning("Docling warmup skipped: %s", wex)
+
+    import threading
+    threading.Thread(target=_warmup_docling, daemon=True, name="docling-warmup").start()
 
     # Auto-recover any jobs stuck in queued/uploaded state on server startup
     def _recover_stuck_jobs():
