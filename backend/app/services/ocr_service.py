@@ -29,8 +29,13 @@ def ocr_image(png_bytes: bytes) -> str:
     """Run raw OCR on a single cropped PNG.
 
     Returns the OCR engine output joined by newlines, UNALTERED.
-    Returns '' on any failure (non-fatal).
+    Returns '' on any failure or if IMAGE_OCR_ENABLED is False.
     """
+    from app.config import settings
+
+    if not getattr(settings, "IMAGE_OCR_ENABLED", False):
+        return ""
+
     try:
         import io
         import numpy as np

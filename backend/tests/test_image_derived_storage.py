@@ -477,9 +477,9 @@ class TestIdempotencyPreDelete:
              patch("app.services.store_router.get_handler", return_value=None):
             svc.store_image_derived_chunks("doc1")
 
-        # All four DELETE statements must be present
+        # All three active DELETE statements must be present
         joined = "\n".join(delete_calls)
-        for store in ("vector_store", "document_store", "clause_store", "table_store"):
+        for store in ("vector_store", "clause_store", "table_store"):
             assert store in joined, f"DELETE for {store} not found in pre-delete SQL"
 
 

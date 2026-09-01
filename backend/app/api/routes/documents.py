@@ -303,7 +303,7 @@ def delete_document(document_id: str):
     the original PDF and every image/table-crop asset stored in image_store.
     Also clears Neo4j graph data.
     """
-    from app.services.supabase_storage import delete_files
+    from app.services.supabase_storage import delete_all_document_storage, delete_files
     from app.services import graph_service
 
     with get_db() as conn:
@@ -316,56 +316,56 @@ def delete_document(document_id: str):
             if not row:
                 raise DocumentNotFoundError(document_id)
 
-            # Collect image/table asset paths BEFORE the cascade wipes image_store rows
+            # Collect any explicit image/table asset paths before DB deletion
             cur.execute(
                 "SELECT storage_path, storage_bucket FROM multi_store_rag_working.image_store WHERE document_id = %s",
                 (document_id,),
             )
             image_rows = cur.fetchall()
 
-    # Delete original PDF from bucket
-    if row[1]:
-        _try_delete_from_storage(row[2] or "rag-documents", row[1])
+    storage_path = row[1]
+    bucket = row[2] or "rag-documents"
 
-    # Delete any staged parsing payload from bucket
-    _try_delete_from_storage(row[2] or "rag-documents", f"staging/{document_id}/parsed.json")
-
-    # Delete image and table-crop assets from bucket (grouped by bucket)
+    # 1. Delete explicit asset paths from image_store (if any)
     if image_rows:
         by_bucket: dict[str, list[str]] = {}
-        for path, bucket in image_rows:
-            if path and bucket:
-                by_bucket.setdefault(bucket, []).append(path)
-        for bucket, paths in by_bucket.items():
+        for p, b in image_rows:
+            if p:
+                by_bucket.setdefault(b or bucket, []).append(p)
+        for bkt, paths in by_bucket.items():
             try:
-                delete_files(bucket, paths)
-                logger.info(
-                    "Deleted %d asset file(s) from bucket %s for document %s",
-                    len(paths), bucket, document_id,
-                )
+                delete_files(bkt, paths)
             except Exception as exc:
-                logger.warning(
-                    "Could not delete asset files from bucket %s for document %s: %s",
-                    bucket, document_id, exc,
-                )
+                logger.warning("Could not delete asset files from bucket %s for document %s: %s", bkt, document_id, exc)
 
-    # Clear Neo4j graph data for this document
-    graph_service.clear_document_graph(document_id)
+    # 2. Comprehensively delete all folders and files for this document from Supabase Storage:
+    #    - documents/<safe_name>.pdf (original file)
+    #    - images/<document_id>/* (all figure crops)
+    #    - tables/<document_id>/* (all table crops)
+    #    - staging/<document_id>/* (all staged payloads)
     try:
+        delete_all_document_storage(document_id, storage_path=storage_path, bucket=bucket)
+        logger.info("Deleted all Supabase Storage folders and assets for document %s", document_id)
+    except Exception as exc:
+        logger.warning("Storage folder cleanup error for %s: %s", document_id, exc)
+
+    # 3. Clear Neo4j graph data for this document
+    try:
+        graph_service.clear_document_graph(document_id)
         from app.services.graph_build_service import _signal_community_recompute
         _signal_community_recompute(document_id)
     except Exception as exc:
-        logger.warning("Failed to signal community recompute for %s: %s", document_id, exc)
+        logger.warning("Failed to clear graph data or signal community recompute for %s: %s", document_id, exc)
 
-    # Invalidate retrieval and query caches
+    # 4. Invalidate retrieval and query caches
     try:
         from app.services import retrieval_cache
         retrieval_cache.clear_all()
     except Exception as exc:
         logger.debug("Could not clear retrieval cache: %s", exc)
 
-    # Delete DB row — FK ON DELETE CASCADE cleans all child tables:
-    # (vector_store, table_store, table_row_store, clause_store, image_store, parse_staging, ingestion_jobs)
+    # 5. Delete DB row — FK ON DELETE CASCADE cleans all child tables:
+    #    (vector_store, table_store, table_row_store, clause_store, image_store, parse_staging, ingestion_jobs)
     with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -373,6 +373,7 @@ def delete_document(document_id: str):
                 (document_id,),
             )
 
+    logger.info("Successfully cascade-deleted document %s and all associated storage/database assets", document_id)
     return {"deleted": True, "document_id": document_id}
 
 

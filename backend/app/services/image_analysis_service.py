@@ -14,6 +14,7 @@ import base64
 import json
 import logging
 import re
+import time
 
 import httpx
 
@@ -280,8 +281,8 @@ def analyze_image(png_bytes: bytes, raw_ocr_text: str) -> dict:
         )
         full_prompt = _VLM_PROMPT + ocr_section
 
-        model_name = getattr(settings, "GROQ_VLM_MODEL", None) or "llama-3.2-11b-vision-preview"
-        timeout_seconds = getattr(settings, "VLM_TIMEOUT_SECONDS", 12.0)
+        model_name = getattr(settings, "GROQ_VLM_MODEL", None) or "qwen/qwen3.8-27b"
+        timeout_seconds = getattr(settings, "VLM_TIMEOUT_SECONDS", 15.0)
 
         payload = {
             "model": model_name,
@@ -297,11 +298,29 @@ def analyze_image(png_bytes: bytes, raw_ocr_text: str) -> dict:
         }
 
         base = settings.GROQ_BASE_URL.rstrip("/")
-        with httpx.Client(timeout=timeout_seconds) as client:
-            resp = client.post(f"{base}/chat/completions", json=payload, headers=headers)
-            resp.raise_for_status()
+        raw_resp = None
+        max_attempts = 4
+        for attempt in range(1, max_attempts + 1):
+            try:
+                with httpx.Client(timeout=timeout_seconds) as client:
+                    resp = client.post(f"{base}/chat/completions", json=payload, headers=headers)
+                    if resp.status_code == 429 and attempt < max_attempts:
+                        retry_after = float(resp.headers.get("retry-after", 2.0 * attempt))
+                        logger.info("analyze_image 429 rate limit — waiting %.1fs before retry (attempt %d/%d)", retry_after, attempt, max_attempts)
+                        time.sleep(retry_after)
+                        continue
+                    resp.raise_for_status()
+                    raw_resp = resp.json()
+                    break
+            except httpx.HTTPStatusError as h_err:
+                if h_err.response.status_code == 429 and attempt < max_attempts:
+                    time.sleep(2.0 * attempt)
+                    continue
+                raise
 
-        raw_resp = resp.json()
+        if not raw_resp or "choices" not in raw_resp:
+            return _fallback
+
         content = raw_resp["choices"][0]["message"]["content"].strip()
         logger.debug("analyze_image raw response (first 300): %s", content[:300])
 

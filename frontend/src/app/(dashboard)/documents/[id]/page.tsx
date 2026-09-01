@@ -1,18 +1,34 @@
 "use client";
 
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, FileText, Loader2, AlertCircle, Calendar, User, BookOpen } from "lucide-react";
+import { ArrowLeft, FileText, Loader2, AlertCircle, Calendar, User, BookOpen, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useDocument } from "@/hooks/useDocuments";
+import { useDocument, useDeleteDocument } from "@/hooks/useDocuments";
 import { ChunkViewer } from "@/components/documents/ChunkViewer";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { cn, formatDate, capitalize } from "@/lib/utils";
 import type { DocumentType } from "@/lib/types";
 import { DOC_TYPE_COLORS } from "@/lib/types";
 
 export default function DocumentDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const documentId = params.id as string;
   const { data: doc, isLoading, error } = useDocument(documentId);
+  const { mutate: deleteDoc, isPending: isDeleting } = useDeleteDocument();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const handleDelete = () => {
+    deleteDoc(documentId, {
+      onSuccess: () => {
+        router.push("/documents");
+      },
+      onSettled: () => {
+        setShowDeleteConfirm(false);
+      },
+    });
+  };
 
   if (isLoading) {
     return (
@@ -39,14 +55,36 @@ export default function DocumentDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Back nav */}
-      <Link
-        href="/documents"
-        className="inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:text-gray-300"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Documents
-      </Link>
+      {/* Back nav & Delete Action */}
+      <div className="flex items-center justify-between">
+        <Link
+          href="/documents"
+          className="inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:text-gray-300"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Documents
+        </Link>
+
+        <button
+          onClick={() => setShowDeleteConfirm(true)}
+          disabled={isDeleting}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-500/10 border border-red-200 dark:border-red-500/20 transition-colors disabled:opacity-50"
+        >
+          {isDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+          Delete Document
+        </button>
+      </div>
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        title="Delete Document"
+        description={`Are you sure you want to delete "${doc.original_filename}"? This will permanently delete the file from Supabase Storage and remove all associated tables, chunks, embeddings, and graph relations.`}
+        confirmText="Delete Permanently"
+        variant="danger"
+        isLoading={isDeleting}
+        onConfirm={handleDelete}
+        onClose={() => setShowDeleteConfirm(false)}
+      />
 
       {/* ── Row 1: document statistics  |  summary + reasoning (equal height) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">

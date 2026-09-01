@@ -125,3 +125,54 @@ def create_signed_url(bucket: str, path: str, expires_in: int = 3600) -> str:
         _signed_url_cache[key] = (url, now + ttl)
 
     return url
+
+
+def delete_folder(bucket: str, prefix: str) -> int:
+    """Delete all objects under a folder prefix in Supabase Storage. Returns deleted count."""
+    prefix = prefix.strip("/")
+    if not prefix:
+        return 0
+    try:
+        items = _client().storage.from_(bucket).list(prefix)
+        if not items:
+            return 0
+        paths = []
+        for item in items:
+            name = item.get("name")
+            if name and name != ".emptyFolderPlaceholder":
+                paths.append(f"{prefix}/{name}")
+        if paths:
+            delete_files(bucket, paths)
+            logger.info("Deleted %d file(s) under %s/%s", len(paths), bucket, prefix)
+            return len(paths)
+    except Exception as exc:
+        logger.warning("delete_folder failed for %s/%s: %s", bucket, prefix, exc)
+    return 0
+
+
+def delete_all_document_storage(document_id: str, storage_path: str = None, bucket: str = None) -> None:
+    """Comprehensively delete all files associated with a document from Supabase Storage:
+    1. The original document file (storage_path, e.g. documents/<uuid>.pdf)
+    2. All extracted image crops (images/<document_id>/*)
+    3. All table crop images (tables/<document_id>/*)
+    4. All staging payloads (staging/<document_id>/*)
+    """
+    from app.config import settings
+    bucket = bucket or settings.SUPABASE_STORAGE_BUCKET
+
+    # 1. Delete original document file
+    if storage_path:
+        try:
+            delete_files(bucket, [storage_path])
+        except Exception as exc:
+            logger.warning("Failed to delete original document file %s: %s", storage_path, exc)
+
+    # 2. Delete all images under images/<doc_id>/
+    delete_folder(bucket, f"images/{document_id}")
+
+    # 3. Delete all tables under tables/<doc_id>/
+    delete_folder(bucket, f"tables/{document_id}")
+
+    # 4. Delete all staging files under staging/<doc_id>/
+    delete_folder(bucket, f"staging/{document_id}")
+

@@ -187,11 +187,13 @@ class Settings(BaseSettings):
     # Max output tokens for the per-image VLM extraction call (image_analysis_service).
     VLM_MAX_TOKENS: int = 1536
     # Groq Vision-Language Model for multimodal image analysis & table reconstruction
-    GROQ_VLM_MODEL: str = "llama-3.2-11b-vision-preview"
+    GROQ_VLM_MODEL: str = "qwen/qwen3.8-27b"
     # Timeout in seconds for per-image VLM analysis (prevents pipeline stalling)
-    VLM_TIMEOUT_SECONDS: float = 12.0
+    VLM_TIMEOUT_SECONDS: float = 15.0
     # Flag to toggle VLM image extraction
     VLM_ENABLED: bool = True
+    # Flag to enable local EasyOCR on CPU (disabled by default in favor of fast Groq VLM transcription)
+    IMAGE_OCR_ENABLED: bool = False
     # Run the VLM on Docling-extracted table crops (image + Docling text as OCR
     # evidence) to reconstruct a clean structured table — correct OCR errors,
     # recover missing values, rebuild merged cells. VLM output becomes authoritative

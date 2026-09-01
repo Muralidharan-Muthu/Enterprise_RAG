@@ -612,10 +612,9 @@ def store_image_derived_chunks(document_id: str) -> None:
     _OFFSET = 50_000
     with get_db() as conn:
         with conn.cursor() as cur:
-            # vector_store and document_store share chunk_index
+            # vector_store, clause_store, and table_store
             for tbl, col in (
                 ("vector_store", "chunk_index"),
-                ("document_store", "chunk_index"),
                 ("clause_store", "clause_index"),
                 ("table_store", "table_index"),
             ):
